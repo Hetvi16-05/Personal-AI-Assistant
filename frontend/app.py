@@ -16,56 +16,119 @@ st.set_page_config(
 # ── CSS ──────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
 
+html, body, [class*="css"] {
+    font-family: 'Outfit', sans-serif;
+}
+
+/* Main background radial gradient overlay */
+.stApp {
+    background: radial-gradient(circle at 10% 20%, rgba(20, 20, 35, 1) 0%, rgba(10, 10, 20, 1) 90%);
+}
+
+/* Glassmorphism metric cards */
 .metric-card {
-    background: linear-gradient(135deg, #1e1e2e, #2a2a3e);
-    border: 1px solid #3a3a5e;
-    border-radius: 12px;
-    padding: 1.2rem 1.4rem;
-    margin-bottom: 0.8rem;
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 1.3rem 1.5rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
-.metric-card h4 { color: #a0a0c0; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.1em; margin: 0 0 0.3rem; }
-.metric-card p  { color: #ffffff; font-size: 1.5rem; font-weight: 700; margin: 0; }
+.metric-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(123, 44, 191, 0.4);
+    box-shadow: 0 15px 35px 0 rgba(123, 44, 191, 0.15);
+}
+.metric-card h4 {
+    color: #b0b0d0;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    margin: 0 0 0.5rem;
+}
+.metric-card p {
+    background: linear-gradient(90deg, #4cc9f0, #7b2cbf);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin: 0;
+}
 
+/* Glassmorphism briefing card */
 .coach-box {
-    background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
-    border-left: 4px solid #6c63ff;
-    border-radius: 12px;
-    padding: 1.5rem;
-    color: #e0e0ff;
+    background: rgba(255, 255, 255, 0.02);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-left: 5px solid #7b2cbf;
+    border-radius: 16px;
+    padding: 1.75rem;
+    color: #e2e8f0;
     line-height: 1.8;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+    margin-bottom: 1.5rem;
 }
+
+/* Next Best Action box */
 .action-box {
-    background: linear-gradient(135deg, #1a1a2e, #16213e);
-    border: 1px solid #6c63ff55;
-    border-radius: 12px;
-    padding: 1.2rem;
-    color: #c0c0ff;
+    background: linear-gradient(135deg, rgba(123, 44, 191, 0.12) 0%, rgba(58, 12, 163, 0.12) 100%);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(123, 44, 191, 0.35);
+    border-radius: 16px;
+    padding: 1.5rem;
+    color: #d0d2ff;
+    box-shadow: 0 8px 32px 0 rgba(123, 44, 191, 0.08);
+    transition: all 0.3s ease;
 }
+.action-box:hover {
+    border-color: rgba(76, 201, 240, 0.5);
+    box-shadow: 0 15px 35px 0 rgba(76, 201, 240, 0.15);
+}
+
+/* Insight card overrides */
 .insight-card {
-    background: linear-gradient(135deg, #12121f, #1e1e35);
-    border: 1px solid #4444aa44;
-    border-radius: 10px;
-    padding: 1rem 1.2rem;
-    margin-bottom: 0.6rem;
-    color: #d0d0ff;
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 14px;
+    padding: 1.25rem;
+    margin-bottom: 0.8rem;
+    color: #e2e8f0;
+    transition: all 0.25s ease;
+}
+.insight-card:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(247, 37, 133, 0.3);
 }
 .insight-card .type-badge {
     font-size: 0.65rem;
+    font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: #8888cc;
-    margin-bottom: 0.3rem;
+    letter-spacing: 0.15em;
+    color: #f72585;
+    margin-bottom: 0.5rem;
 }
+
+/* Login/Register Panel */
 .login-box {
-    max-width: 420px;
+    max-width: 440px;
     margin: 4rem auto;
-    background: linear-gradient(135deg, #1a1a2e, #16213e);
-    border: 1px solid #3a3a6e;
-    border-radius: 16px;
-    padding: 2.5rem;
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 24px;
+    padding: 3rem 2.5rem;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
 }
 </style>
 """, unsafe_allow_html=True)

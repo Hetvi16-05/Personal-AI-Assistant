@@ -126,14 +126,39 @@ docker-compose up --build
 
 ---
 
-## Deploy to Production
+## Deploy to Production (Portfolio Hosting)
 
-| Component | Platform | Notes |
-|-----------|----------|-------|
-| Backend | Railway | Set all env vars from `.env` |
-| Database | Supabase | Already configured |
-| Frontend | Streamlit Cloud | Set `API_URL=https://your-railway-url` |
-| LLM | Gemini 2.5 Flash | Free tier |
+### 1. Database (Supabase)
+The database is already hosted on Supabase. Ensure your database tables are created by running the Alembic migrations locally once. If needed, enable pgvector in the Supabase SQL editor:
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+```
+
+### 2. Backend API (Render)
+You can deploy the backend API to Render (free/hobby tier) using the provided Blueprint configuration `render.yaml`:
+1. Sign up on [Render](https://render.com).
+2. Connect your GitHub repository.
+3. Choose **Blueprints** from the Render dashboard, click **New Blueprint Instance**, select your repository, and click **Deploy**.
+4. Alternatively, create a **Web Service** manually:
+   * **Build Command:** `pip install -r backend/requirements.txt`
+   * **Start Command:** `cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+   * **Environment Variables:**
+     * `DATABASE_URL`: Your Supabase connection string.
+     * `GEMINI_API_KEY`: Your Gemini API key.
+     * `JWT_SECRET_KEY`: A random hex string (generate with `python3 -c "import secrets; print(secrets.token_hex(32))"`).
+     * `JWT_ALGORITHM`: `HS256`
+     * `ACCESS_TOKEN_EXPIRE_MINUTES`: `60`
+
+### 3. Frontend App (Streamlit Community Cloud)
+The Streamlit app can be hosted for free on Streamlit Community Cloud:
+1. Visit [Streamlit Community Cloud](https://share.streamlit.io).
+2. Click **Create app** and connect your GitHub account.
+3. Select your repository, set the branch to `main`, and specify the Main File Path as `frontend/app.py`.
+4. Click **Advanced settings...** and add the following environment variable to the Secrets box:
+   ```toml
+   API_URL = "https://your-render-backend-url.onrender.com"
+   ```
+5. Click **Deploy!** Your app will be live with a shareable public URL.
 
 ---
 
