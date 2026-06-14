@@ -237,29 +237,29 @@ def show_auth():
         tab_login, tab_register = st.tabs(["Login", "Register"])
 
         with tab_login:
-            with st.form("login_form"):
-                email = st.text_input("Email", placeholder="you@example.com")
-                password = st.text_input("Password", type="password")
-                submitted = st.form_submit_button("Login", use_container_width=True)
-                if submitted and email and password:
+            email = st.text_input("Email", placeholder="you@example.com", key="login_email")
+            password = st.text_input("Password", type="password", key="login_password")
+            if st.button("Login", key="login_submit", use_container_width=True):
+                if email and password:
                     result = api_post("/auth/login", {"email": email, "password": password})
                     if result:
                         st.session_state.token = result["access_token"]
                         st.session_state.user = result["user"]
                         st.success("Welcome back!")
                         st.rerun()
+                else:
+                    st.error("Please enter email and password")
 
         with tab_register:
-            with st.form("register_form"):
-                name = st.text_input("Your Name")
-                email = st.text_input("Email", placeholder="you@example.com")
-                password = st.text_input("Password", type="password")
-                skills = st.text_input("Skills (optional)", placeholder="Python, Statistics")
-                interests = st.text_input("Interests (optional)", placeholder="AI, ML, GATE")
-                submitted = st.form_submit_button("Create Account", use_container_width=True)
-                if submitted and name and email and password:
+            name = st.text_input("Your Name", key="reg_name")
+            reg_email = st.text_input("Email", placeholder="you@example.com", key="reg_email")
+            reg_password = st.text_input("Password", type="password", key="reg_password")
+            skills = st.text_input("Skills (optional)", placeholder="Python, Statistics", key="reg_skills")
+            interests = st.text_input("Interests (optional)", placeholder="AI, ML, GATE", key="reg_interests")
+            if st.button("Create Account", key="reg_submit", use_container_width=True):
+                if name and reg_email and reg_password:
                     result = api_post("/auth/register", {
-                        "name": name, "email": email, "password": password,
+                        "name": name, "email": reg_email, "password": reg_password,
                         "skills": skills, "interests": interests
                     })
                     if result:
@@ -267,6 +267,8 @@ def show_auth():
                         st.session_state.user = result["user"]
                         st.success("Account created!")
                         st.rerun()
+                else:
+                    st.error("Please fill in all required fields (Name, Email, Password)")
 
 
 # ══════════════════════════════════════════════════════════
@@ -275,16 +277,28 @@ def show_auth():
 if not st.session_state.get("token"):
     st.markdown("""
     <style>
+    /* Outermost login panel: wide desktop website format */
     div[data-testid="stVerticalBlockBorderWrapper"] {
-        max-width: 440px;
+        max-width: 800px;
         margin: 4rem auto;
         background: rgba(255, 255, 255, 0.03) !important;
         backdrop-filter: blur(16px) !important;
         -webkit-backdrop-filter: blur(16px) !important;
-        border: 1px solid rgba(123, 44, 191, 0.2) !important;
+        border: 1px solid rgba(123, 44, 191, 0.25) !important;
         border-radius: 24px !important;
-        padding: 3rem 2.5rem !important;
+        padding: 3rem 4rem !important;
         box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4) !important;
+    }
+    
+    /* Reset nested border wrappers to prevent the 'box-inside-box' effect and squeezed inputs */
+    div[data-testid="stVerticalBlockBorderWrapper"] div[data-testid="stVerticalBlockBorderWrapper"] {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
     }
     </style>
     """, unsafe_allow_html=True)
