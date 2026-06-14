@@ -22,9 +22,31 @@ html, body, [class*="css"] {
     font-family: 'Outfit', sans-serif;
 }
 
-/* Main background radial gradient overlay */
+/* Moving background gradient */
+@keyframes gradient-move {
+    0% { background: radial-gradient(circle at 15% 25%, rgba(30, 20, 50, 1) 0%, rgba(10, 10, 22, 1) 90%); }
+    50% { background: radial-gradient(circle at 85% 75%, rgba(20, 15, 42, 1) 0%, rgba(8, 8, 18, 1) 90%); }
+    100% { background: radial-gradient(circle at 15% 25%, rgba(30, 20, 50, 1) 0%, rgba(10, 10, 22, 1) 90%); }
+}
+
 .stApp {
-    background: radial-gradient(circle at 10% 20%, rgba(20, 20, 35, 1) 0%, rgba(10, 10, 20, 1) 90%);
+    animation: gradient-move 18s ease infinite;
+}
+
+/* Page fade-in entry animation */
+@keyframes fade-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.element-container, .stMarkdown, .stVerticalBlock {
+    animation: fade-in 0.4s ease-out;
+}
+
+/* Soft glowing neon pulse for metrics */
+@keyframes neon-pulse {
+    0% { box-shadow: 0 0 15px rgba(123, 44, 191, 0.1), 0 8px 32px 0 rgba(0, 0, 0, 0.3); }
+    50% { box-shadow: 0 0 25px rgba(123, 44, 191, 0.25), 0 8px 32px 0 rgba(0, 0, 0, 0.3); }
+    100% { box-shadow: 0 0 15px rgba(123, 44, 191, 0.1), 0 8px 32px 0 rgba(0, 0, 0, 0.3); }
 }
 
 /* Glassmorphism metric cards */
@@ -32,17 +54,17 @@ html, body, [class*="css"] {
     background: rgba(255, 255, 255, 0.03);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(123, 44, 191, 0.15);
     border-radius: 16px;
     padding: 1.3rem 1.5rem;
     margin-bottom: 1rem;
-    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
-    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    animation: neon-pulse 6s infinite ease-in-out;
+    transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
 }
 .metric-card:hover {
-    transform: translateY(-4px);
-    border-color: rgba(123, 44, 191, 0.4);
-    box-shadow: 0 15px 35px 0 rgba(123, 44, 191, 0.15);
+    transform: translateY(-5px) scale(1.01);
+    border-color: rgba(76, 201, 240, 0.6);
+    box-shadow: 0 0 30px rgba(76, 201, 240, 0.45), 0 15px 35px 0 rgba(76, 201, 240, 0.1);
 }
 .metric-card h4 {
     color: #b0b0d0;
@@ -74,23 +96,35 @@ html, body, [class*="css"] {
     line-height: 1.8;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
     margin-bottom: 1.5rem;
+    transition: all 0.3s ease;
+}
+.coach-box:hover {
+    box-shadow: 0 0 25px rgba(123, 44, 191, 0.25);
+    border-left-color: #4cc9f0;
 }
 
-/* Next Best Action box */
+/* Next Best Action pulsing glow */
+@keyframes action-glow {
+    0% { border-color: rgba(123, 44, 191, 0.35); box-shadow: 0 0 15px rgba(123, 44, 191, 0.08); }
+    50% { border-color: rgba(76, 201, 240, 0.6); box-shadow: 0 0 25px rgba(76, 201, 240, 0.35); }
+    100% { border-color: rgba(123, 44, 191, 0.35); box-shadow: 0 0 15px rgba(123, 44, 191, 0.08); }
+}
+
 .action-box {
-    background: linear-gradient(135deg, rgba(123, 44, 191, 0.12) 0%, rgba(58, 12, 163, 0.12) 100%);
+    background: linear-gradient(135deg, rgba(123, 44, 191, 0.15) 0%, rgba(58, 12, 163, 0.15) 100%);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     border: 1px solid rgba(123, 44, 191, 0.35);
     border-radius: 16px;
     padding: 1.5rem;
     color: #d0d2ff;
-    box-shadow: 0 8px 32px 0 rgba(123, 44, 191, 0.08);
-    transition: all 0.3s ease;
+    animation: action-glow 4s infinite ease-in-out;
+    transition: all 0.4s ease;
 }
 .action-box:hover {
-    border-color: rgba(76, 201, 240, 0.5);
-    box-shadow: 0 15px 35px 0 rgba(76, 201, 240, 0.15);
+    transform: translateY(-2px);
+    border-color: rgba(247, 37, 133, 0.6);
+    box-shadow: 0 0 30px rgba(247, 37, 133, 0.4);
 }
 
 /* Insight card overrides */
@@ -129,6 +163,26 @@ html, body, [class*="css"] {
     border-radius: 24px;
     padding: 3rem 2.5rem;
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+}
+
+/* Custom styles for native Streamlit buttons */
+div.stButton > button {
+    background: linear-gradient(90deg, #7b2cbf, #3a0ca3) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    color: white !important;
+    border-radius: 12px !important;
+    padding: 0.55rem 1.4rem !important;
+    font-weight: 600 !important;
+    box-shadow: 0 4px 15px rgba(123, 44, 191, 0.2) !important;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+}
+div.stButton > button:hover {
+    transform: translateY(-2px) scale(1.02) !important;
+    box-shadow: 0 0 20px rgba(76, 201, 240, 0.5) !important;
+    border-color: rgba(76, 201, 240, 0.5) !important;
+}
+div.stButton > button:active {
+    transform: translateY(1px) scale(0.98) !important;
 }
 </style>
 """, unsafe_allow_html=True)
