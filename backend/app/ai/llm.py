@@ -1,4 +1,5 @@
 
+# pyrefly: ignore [missing-import]
 import google.generativeai as genai
 from app.config import settings
 
