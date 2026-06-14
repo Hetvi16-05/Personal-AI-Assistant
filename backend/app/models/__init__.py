@@ -5,8 +5,12 @@ from app.models.task import Task
 from app.models.memory import UserMemory
 from app.models.roadmap import Roadmap, Milestone
 from app.models.report import WeeklyReport
+from app.models.chat import ChatSession, ChatMessage
+from app.models.vector_memory import MemoryEmbedding
+from app.models.insight import AIInsight
 
 __all__ = [
     "User", "Goal", "Project", "Task",
-    "UserMemory", "Roadmap", "Milestone", "WeeklyReport"
+    "UserMemory", "Roadmap", "Milestone", "WeeklyReport",
+    "ChatSession", "ChatMessage", "MemoryEmbedding", "AIInsight"
 ]

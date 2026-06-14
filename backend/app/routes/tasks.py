@@ -3,8 +3,9 @@ from sqlalchemy.orm import Session
 from app.database.db import get_db
 from app.models import Task
 from app.models.task import TaskStatus
+from app.models.user import User
 from app.schemas.task import TaskCreate, TaskUpdate, TaskOut
-from app.config import settings
+from app.auth.dependencies import get_current_user
 from datetime import datetime
 from typing import List, Optional
 
@@ -12,8 +13,12 @@ router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
 
 @router.post("", response_model=TaskOut, status_code=201)
-def create_task(payload: TaskCreate, db: Session = Depends(get_db)):
-    task = Task(user_id=settings.DEFAULT_USER_ID, **payload.model_dump())
+def create_task(
+    payload: TaskCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    task = Task(user_id=current_user.id, **payload.model_dump())
     db.add(task)
     db.commit()
     db.refresh(task)
@@ -24,9 +29,10 @@ def create_task(payload: TaskCreate, db: Session = Depends(get_db)):
 def list_tasks(
     status: Optional[TaskStatus] = Query(None),
     goal_id: Optional[int] = Query(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    q = db.query(Task).filter(Task.user_id == settings.DEFAULT_USER_ID)
+    q = db.query(Task).filter(Task.user_id == current_user.id)
     if status:
         q = q.filter(Task.status == status)
     if goal_id:
@@ -35,8 +41,13 @@ def list_tasks(
 
 
 @router.patch("/{task_id}", response_model=TaskOut)
-def update_task(task_id: int, payload: TaskUpdate, db: Session = Depends(get_db)):
-    task = db.query(Task).filter(Task.id == task_id, Task.user_id == settings.DEFAULT_USER_ID).first()
+def update_task(
+    task_id: int,
+    payload: TaskUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    task = db.query(Task).filter(Task.id == task_id, Task.user_id == current_user.id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found.")
     for field, value in payload.model_dump(exclude_none=True).items():
@@ -49,8 +60,12 @@ def update_task(task_id: int, payload: TaskUpdate, db: Session = Depends(get_db)
 
 
 @router.delete("/{task_id}", status_code=204)
-def delete_task(task_id: int, db: Session = Depends(get_db)):
-    task = db.query(Task).filter(Task.id == task_id, Task.user_id == settings.DEFAULT_USER_ID).first()
+def delete_task(
+    task_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    task = db.query(Task).filter(Task.id == task_id, Task.user_id == current_user.id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found.")
     db.delete(task)

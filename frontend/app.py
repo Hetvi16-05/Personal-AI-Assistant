@@ -1,7 +1,10 @@
 import streamlit as st
 import httpx
+import os
+import plotly.graph_objects as go
+import plotly.express as px
 
-API = "http://localhost:8000"
+API = os.getenv("API_URL", "http://localhost:8000")
 
 st.set_page_config(
     page_title="Personal AI Assistant",
@@ -10,22 +13,21 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ── Custom CSS ────────────────────────────────────────────
+# ── CSS ──────────────────────────────────────────────────
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-
 html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 
 .metric-card {
     background: linear-gradient(135deg, #1e1e2e, #2a2a3e);
     border: 1px solid #3a3a5e;
     border-radius: 12px;
-    padding: 1.2rem;
+    padding: 1.2rem 1.4rem;
     margin-bottom: 0.8rem;
 }
-.metric-card h4 { color: #a0a0c0; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; margin: 0 0 0.3rem; }
-.metric-card p  { color: #ffffff; font-size: 1.4rem; font-weight: 700; margin: 0; }
+.metric-card h4 { color: #a0a0c0; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.1em; margin: 0 0 0.3rem; }
+.metric-card p  { color: #ffffff; font-size: 1.5rem; font-weight: 700; margin: 0; }
 
 .coach-box {
     background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
@@ -33,7 +35,7 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     border-radius: 12px;
     padding: 1.5rem;
     color: #e0e0ff;
-    line-height: 1.7;
+    line-height: 1.8;
 }
 .action-box {
     background: linear-gradient(135deg, #1a1a2e, #16213e);
@@ -42,158 +44,260 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     padding: 1.2rem;
     color: #c0c0ff;
 }
-.score-pill {
-    display: inline-block;
-    background: #6c63ff22;
-    border: 1px solid #6c63ff66;
-    border-radius: 20px;
-    padding: 2px 12px;
-    font-size: 0.8rem;
-    color: #a0a0ff;
-    margin-left: 8px;
+.insight-card {
+    background: linear-gradient(135deg, #12121f, #1e1e35);
+    border: 1px solid #4444aa44;
+    border-radius: 10px;
+    padding: 1rem 1.2rem;
+    margin-bottom: 0.6rem;
+    color: #d0d0ff;
+}
+.insight-card .type-badge {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #8888cc;
+    margin-bottom: 0.3rem;
+}
+.login-box {
+    max-width: 420px;
+    margin: 4rem auto;
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    border: 1px solid #3a3a6e;
+    border-radius: 16px;
+    padding: 2.5rem;
 }
 </style>
 """, unsafe_allow_html=True)
 
 
 # ── Helpers ───────────────────────────────────────────────
+def get_headers():
+    token = st.session_state.get("token", "")
+    return {"Authorization": f"Bearer {token}"} if token else {}
+
+
 def api_get(path: str):
     try:
-        r = httpx.get(f"{API}{path}", timeout=30)
+        r = httpx.get(f"{API}{path}", headers=get_headers(), timeout=30)
+        if r.status_code == 401:
+            st.session_state.token = None
+            st.rerun()
         r.raise_for_status()
         return r.json()
+    except httpx.HTTPStatusError as e:
+        st.error(f"Error: {e.response.json().get('detail', str(e))}")
+        return None
     except Exception as e:
-        st.error(f"API error: {e}")
+        st.error(f"Connection error: {e}")
         return None
 
 
 def api_post(path: str, data: dict):
     try:
-        r = httpx.post(f"{API}{path}", json=data, timeout=60)
+        r = httpx.post(f"{API}{path}", json=data, headers=get_headers(), timeout=60)
+        if r.status_code == 401:
+            st.session_state.token = None
+            st.rerun()
         r.raise_for_status()
         return r.json()
+    except httpx.HTTPStatusError as e:
+        st.error(f"Error: {e.response.json().get('detail', str(e))}")
+        return None
     except Exception as e:
-        st.error(f"API error: {e}")
+        st.error(f"Connection error: {e}")
         return None
 
 
 def api_patch(path: str, data: dict):
     try:
-        r = httpx.patch(f"{API}{path}", json=data, timeout=15)
+        r = httpx.patch(f"{API}{path}", json=data, headers=get_headers(), timeout=15)
         r.raise_for_status()
         return r.json()
     except Exception as e:
-        st.error(f"API error: {e}")
+        st.error(f"Error: {e}")
         return None
 
 
+# ══════════════════════════════════════════════════════════
+# AUTH — Login / Register
+# ══════════════════════════════════════════════════════════
+def show_auth():
+    st.markdown('<div class="login-box">', unsafe_allow_html=True)
+    st.markdown("## 🧠 Personal AI Assistant")
+    st.markdown("Your AI-powered personal mentor")
+    st.divider()
+
+    tab_login, tab_register = st.tabs(["Login", "Register"])
+
+    with tab_login:
+        with st.form("login_form"):
+            email = st.text_input("Email", placeholder="you@example.com")
+            password = st.text_input("Password", type="password")
+            submitted = st.form_submit_button("Login", use_container_width=True)
+            if submitted and email and password:
+                result = api_post("/auth/login", {"email": email, "password": password})
+                if result:
+                    st.session_state.token = result["access_token"]
+                    st.session_state.user = result["user"]
+                    st.success("Welcome back!")
+                    st.rerun()
+
+    with tab_register:
+        with st.form("register_form"):
+            name = st.text_input("Your Name")
+            email = st.text_input("Email", placeholder="you@example.com")
+            password = st.text_input("Password", type="password")
+            skills = st.text_input("Skills (optional)", placeholder="Python, Statistics")
+            interests = st.text_input("Interests (optional)", placeholder="AI, ML, GATE")
+            submitted = st.form_submit_button("Create Account", use_container_width=True)
+            if submitted and name and email and password:
+                result = api_post("/auth/register", {
+                    "name": name, "email": email, "password": password,
+                    "skills": skills, "interests": interests
+                })
+                if result:
+                    st.session_state.token = result["access_token"]
+                    st.session_state.user = result["user"]
+                    st.success("Account created!")
+                    st.rerun()
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+
+# ══════════════════════════════════════════════════════════
+# MAIN APP
+# ══════════════════════════════════════════════════════════
+if not st.session_state.get("token"):
+    show_auth()
+    st.stop()
+
+user = st.session_state.get("user", {})
+
 # ── Sidebar ───────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("## 🧠 Personal AI Assistant")
-    st.markdown("---")
-
-    user = api_get("/users/me")
-    if user:
-        st.markdown(f"**👤 {user['name']}**")
-        if user.get("skills"):
-            st.caption(f"🛠 {user['skills']}")
-        if user.get("interests"):
-            st.caption(f"💡 {user['interests']}")
-        st.markdown("---")
+    st.markdown(f"## 🧠 AI Assistant")
+    st.markdown(f"**👤 {user.get('name', 'User')}**")
+    if user.get("skills"):
+        st.caption(f"🛠 {user['skills']}")
+    st.divider()
 
     page = st.radio(
         "Navigate",
-        ["🏠 Dashboard", "💬 AI Chat", "🎯 Goals", "📋 Tasks", "📁 Projects", "📊 Weekly Review"],
+        ["🏠 Dashboard", "💬 Chat", "🎯 Goals", "📋 Tasks",
+         "📁 Projects", "💡 Insights", "📈 Analytics", "📊 Weekly Review"],
         label_visibility="collapsed"
     )
+
+    st.divider()
+    if st.button("🚪 Logout", use_container_width=True):
+        st.session_state.token = None
+        st.session_state.user = None
+        st.rerun()
 
 
 # ══════════════════════════════════════════════════════════
 # DASHBOARD
 # ══════════════════════════════════════════════════════════
 if page == "🏠 Dashboard":
-    st.title("🏠 Dashboard")
+    st.title(f"🏠 Good day, {user.get('name', '')}!")
 
     col1, col2 = st.columns([2, 1])
 
     with col1:
         st.subheader("🤖 Daily Briefing")
         if st.button("🔄 Generate Today's Briefing", use_container_width=True):
-            with st.spinner("Asking your AI coach..."):
+            with st.spinner("Thinking..."):
                 result = api_get("/ai/daily-coach")
                 if result:
-                    st.markdown(f'<div class="coach-box">{result["briefing"]}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="coach-box">{result["briefing"]}</div>',
+                                unsafe_allow_html=True)
                     if result.get("top_tasks"):
-                        st.markdown("**📌 Top Tasks Today:**")
+                        st.markdown("**📌 Today's Focus:**")
                         for t in result["top_tasks"]:
-                            st.markdown(f"- {t['title']} `score: {t['score']}`")
+                            st.markdown(f"- {t['title']} `{t['score']}`")
 
     with col2:
-        st.subheader("⚡ Next Best Action")
-        if st.button("🎯 What should I do now?", use_container_width=True):
+        st.subheader("⚡ Next Action")
+        if st.button("🎯 What now?", use_container_width=True):
             with st.spinner("Calculating..."):
                 result = api_get("/ai/next-action")
-                if result:
-                    if result.get("recommended_action"):
-                        st.markdown(f"""
+                if result and result.get("recommended_action"):
+                    st.markdown(f"""
 <div class="action-box">
-<h4>✅ {result['recommended_action']}</h4>
-<span class="score-pill">score: {result['score']}</span>
-<p style="margin-top:0.8rem; color:#a0a0cc; font-size:0.9rem;">{result['reason']}</p>
-</div>
-""", unsafe_allow_html=True)
-                    else:
-                        st.info(result.get("reason", "No tasks found."))
+<strong>✅ {result['recommended_action']}</strong><br>
+<small style="color:#8888cc">Score: {result['score']} | Impact: {result.get('estimated_impact','')}</small>
+<p style="margin-top:0.7rem;font-size:0.88rem;color:#a0a0cc;">{result.get('reason','')}</p>
+<p style="font-size:0.82rem;color:#8080aa;font-style:italic;">{result.get('why_it_matters','')}</p>
+</div>""", unsafe_allow_html=True)
 
-    st.markdown("---")
-
-    # Stats
-    st.subheader("📊 Quick Stats")
+    st.divider()
     goals_data = api_get("/goals") or []
     tasks_data = api_get("/tasks") or []
     pending = [t for t in tasks_data if t["status"] in ("pending", "in_progress")]
     completed = [t for t in tasks_data if t["status"] == "completed"]
+    pct = round(len(completed) / max(len(tasks_data), 1) * 100)
 
     c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        st.markdown(f'<div class="metric-card"><h4>Active Goals</h4><p>{len([g for g in goals_data if g["status"]=="active"])}</p></div>', unsafe_allow_html=True)
-    with c2:
-        st.markdown(f'<div class="metric-card"><h4>Pending Tasks</h4><p>{len(pending)}</p></div>', unsafe_allow_html=True)
-    with c3:
-        st.markdown(f'<div class="metric-card"><h4>Completed</h4><p>{len(completed)}</p></div>', unsafe_allow_html=True)
-    with c4:
-        pct = round(len(completed) / len(tasks_data) * 100) if tasks_data else 0
-        st.markdown(f'<div class="metric-card"><h4>Completion %</h4><p>{pct}%</p></div>', unsafe_allow_html=True)
+    for col, label, val in zip(
+        [c1, c2, c3, c4],
+        ["Active Goals", "Pending Tasks", "Completed", "Completion %"],
+        [len([g for g in goals_data if g["status"] == "active"]),
+         len(pending), len(completed), f"{pct}%"]
+    ):
+        col.markdown(
+            f'<div class="metric-card"><h4>{label}</h4><p>{val}</p></div>',
+            unsafe_allow_html=True
+        )
 
 
 # ══════════════════════════════════════════════════════════
-# AI CHAT
+# CHAT
 # ══════════════════════════════════════════════════════════
-elif page == "💬 AI Chat":
+elif page == "💬 Chat":
     st.title("💬 AI Chat")
-    st.caption("Chat with your personal AI mentor. It knows your goals, tasks, and memory.")
 
-    if "chat_history" not in st.session_state:
-        st.session_state.chat_history = []
+    sessions = api_get("/chat/sessions") or []
 
-    for msg in st.session_state.chat_history:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
+    col_left, col_right = st.columns([1, 3])
 
-    user_input = st.chat_input("Ask me anything...")
+    with col_left:
+        st.subheader("Sessions")
+        if st.button("➕ New Session", use_container_width=True):
+            result = api_post("/chat/sessions", {"title": "New Conversation"})
+            if result:
+                st.session_state.active_session = result["id"]
+                st.rerun()
 
-    if user_input:
-        st.session_state.chat_history.append({"role": "user", "content": user_input})
-        with st.chat_message("user"):
-            st.markdown(user_input)
+        for s in sessions:
+            label = s["title"][:30] + ("..." if len(s["title"]) > 30 else "")
+            if st.button(f"💬 {label}", key=f"sess_{s['id']}", use_container_width=True):
+                st.session_state.active_session = s["id"]
+                st.rerun()
 
-        with st.chat_message("assistant"):
-            with st.spinner("Thinking..."):
-                result = api_post("/ai/chat", {"message": user_input})
-                if result:
-                    response = result.get("response", "Sorry, I couldn't generate a response.")
-                    st.markdown(response)
-                    st.session_state.chat_history.append({"role": "assistant", "content": response})
+    with col_right:
+        session_id = st.session_state.get("active_session")
+        if not session_id:
+            st.info("Select or create a session to start chatting.")
+        else:
+            messages = api_get(f"/chat/sessions/{session_id}/messages") or []
+            for msg in messages:
+                with st.chat_message(msg["role"]):
+                    st.markdown(msg["content"])
+
+            user_input = st.chat_input("Ask your AI mentor...")
+            if user_input:
+                with st.chat_message("user"):
+                    st.markdown(user_input)
+                with st.chat_message("assistant"):
+                    with st.spinner("Thinking..."):
+                        result = api_post(
+                            f"/chat/sessions/{session_id}/messages",
+                            {"content": user_input}
+                        )
+                        if result:
+                            st.markdown(result["assistant_message"]["content"])
+                            st.rerun()
 
 
 # ══════════════════════════════════════════════════════════
@@ -204,35 +308,29 @@ elif page == "🎯 Goals":
 
     with st.expander("➕ Add New Goal"):
         with st.form("new_goal"):
-            title = st.text_input("Goal Title")
+            title = st.text_input("Goal Title *")
             desc = st.text_area("Description", height=80)
             deadline = st.date_input("Deadline (optional)")
-            submitted = st.form_submit_button("Create Goal")
-            if submitted and title:
-                result = api_post("/goals", {
-                    "title": title,
-                    "description": desc,
-                    "deadline": str(deadline) + "T00:00:00" if deadline else None
-                })
-                if result:
-                    st.success(f"✅ Goal '{title}' created!")
+            if st.form_submit_button("Create Goal") and title:
+                r = api_post("/goals", {"title": title, "description": desc,
+                                        "deadline": str(deadline) + "T00:00:00"})
+                if r:
+                    st.success("✅ Goal created!")
                     st.rerun()
 
     goals = api_get("/goals") or []
     for g in goals:
-        status_emoji = {"active": "🟢", "completed": "✅", "paused": "⏸️"}.get(g["status"], "⚪")
-        with st.expander(f"{status_emoji} {g['title']}"):
-            st.markdown(f"**Description:** {g['description'] or 'None'}")
+        emoji = {"active": "🟢", "completed": "✅", "paused": "⏸️"}.get(g["status"], "⚪")
+        with st.expander(f"{emoji} {g['title']}"):
             st.markdown(f"**Status:** {g['status']} | **Deadline:** {g['deadline'][:10] if g['deadline'] else 'None'}")
-
-            # Generate roadmap
-            if st.button(f"🗺 Generate AI Roadmap", key=f"roadmap_{g['id']}"):
-                with st.spinner("Generating your personalized roadmap..."):
-                    result = api_post("/ai/generate-roadmap", {"goal_id": g["id"]})
-                    if result:
+            st.markdown(g.get("description", "") or "")
+            if st.button(f"🗺 Generate AI Roadmap", key=f"rm_{g['id']}"):
+                with st.spinner("Generating roadmap with Gemini..."):
+                    r = api_post("/ai/generate-roadmap", {"goal_id": g["id"]})
+                    if r:
                         st.success("Roadmap generated!")
-                        st.markdown(f"**Summary:** {result['summary']}")
-                        for ms in result.get("milestones", []):
+                        st.markdown(f"**{r['summary']}**")
+                        for ms in r.get("milestones", []):
                             st.markdown(f"**{ms['period']} — {ms['title']}:** {ms['description']}")
 
 
@@ -241,66 +339,57 @@ elif page == "🎯 Goals":
 # ══════════════════════════════════════════════════════════
 elif page == "📋 Tasks":
     st.title("📋 Tasks")
-
     goals = api_get("/goals") or []
     goal_map = {g["id"]: g["title"] for g in goals}
+    goal_options = {g["title"]: g["id"] for g in goals}
 
-    tab1, tab2 = st.tabs(["📋 View Tasks", "➕ Add Task"])
+    tab1, tab2 = st.tabs(["📋 View", "➕ Add"])
 
     with tab1:
-        status_filter = st.selectbox("Filter by status", ["all", "pending", "in_progress", "completed"])
-        path = "/tasks" if status_filter == "all" else f"/tasks?status={status_filter}"
+        status_filter = st.selectbox("Status", ["all", "pending", "in_progress", "completed"])
+        path = f"/tasks?status={status_filter}" if status_filter != "all" else "/tasks"
         tasks = api_get(path) or []
 
         for t in tasks:
-            status_emoji = {"pending": "🔵", "in_progress": "🟡", "completed": "✅", "cancelled": "❌"}.get(t["status"], "⚪")
-            goal_name = goal_map.get(t.get("goal_id"), "No goal")
-            with st.expander(f"{status_emoji} {t['title']} — {goal_name}"):
-                st.markdown(f"**Description:** {t['description'] or 'None'}")
-                st.markdown(f"**Deadline:** {t['deadline'][:10] if t['deadline'] else 'None'}")
+            emoji = {"pending": "🔵", "in_progress": "🟡", "completed": "✅", "cancelled": "❌"}.get(t["status"], "⚪")
+            with st.expander(f"{emoji} {t['title']} — {goal_map.get(t.get('goal_id'), 'No goal')}"):
+                st.markdown(t.get("description") or "")
                 cols = st.columns(4)
-                cols[0].metric("Impact", f"{t['impact_score']}/10")
-                cols[1].metric("Urgency", f"{t['urgency_score']}/10")
-                cols[2].metric("Effort", f"{t['effort_score']}/10")
-                cols[3].metric("Alignment", f"{t['alignment_score']}/10")
+                for col, label, val in zip(cols,
+                    ["Impact", "Urgency", "Effort", "Alignment"],
+                    [t['impact_score'], t['urgency_score'], t['effort_score'], t['alignment_score']]):
+                    col.metric(label, f"{val}/10")
 
-                col_a, col_b = st.columns(2)
+                ca, cb = st.columns(2)
                 if t["status"] != "completed":
-                    if col_a.button("✅ Mark Complete", key=f"done_{t['id']}"):
+                    if ca.button("✅ Done", key=f"done_{t['id']}"):
                         api_patch(f"/tasks/{t['id']}", {"status": "completed"})
                         st.rerun()
-                if col_b.button("🗑 Delete", key=f"del_{t['id']}"):
-                    httpx.delete(f"{API}/tasks/{t['id']}")
+                if cb.button("🗑 Delete", key=f"del_{t['id']}"):
+                    httpx.delete(f"{API}/tasks/{t['id']}", headers=get_headers())
                     st.rerun()
 
     with tab2:
         with st.form("new_task"):
-            title = st.text_input("Task Title *")
-            desc = st.text_area("Description", height=80)
-            goal_options = {g["title"]: g["id"] for g in goals}
-            selected_goal = st.selectbox("Link to Goal (optional)", ["None"] + list(goal_options.keys()))
-            deadline = st.date_input("Deadline (optional)")
-            st.markdown("**Scores (1–10)**")
+            title = st.text_input("Title *")
+            desc = st.text_area("Description", height=70)
+            goal_sel = st.selectbox("Goal", ["None"] + list(goal_options.keys()))
+            deadline = st.date_input("Deadline")
             c1, c2, c3, c4 = st.columns(4)
             impact = c1.slider("Impact", 1, 10, 5)
             urgency = c2.slider("Urgency", 1, 10, 5)
             effort = c3.slider("Effort", 1, 10, 5)
             alignment = c4.slider("Alignment", 1, 10, 5)
-            submitted = st.form_submit_button("Create Task")
-            if submitted and title:
-                payload = {
-                    "title": title,
-                    "description": desc,
-                    "goal_id": goal_options.get(selected_goal) if selected_goal != "None" else None,
-                    "deadline": str(deadline) + "T00:00:00" if deadline else None,
-                    "impact_score": float(impact),
-                    "urgency_score": float(urgency),
-                    "effort_score": float(effort),
-                    "alignment_score": float(alignment)
-                }
-                result = api_post("/tasks", payload)
-                if result:
-                    st.success(f"✅ Task '{title}' created!")
+            if st.form_submit_button("Create Task") and title:
+                r = api_post("/tasks", {
+                    "title": title, "description": desc,
+                    "goal_id": goal_options.get(goal_sel) if goal_sel != "None" else None,
+                    "deadline": str(deadline) + "T00:00:00",
+                    "impact_score": float(impact), "urgency_score": float(urgency),
+                    "effort_score": float(effort), "alignment_score": float(alignment)
+                })
+                if r:
+                    st.success("✅ Task created!")
                     st.rerun()
 
 
@@ -309,36 +398,195 @@ elif page == "📋 Tasks":
 # ══════════════════════════════════════════════════════════
 elif page == "📁 Projects":
     st.title("📁 Projects")
-
     goals = api_get("/goals") or []
     goal_options = {g["title"]: g["id"] for g in goals}
+    goal_map = {g["id"]: g["title"] for g in goals}
 
-    with st.expander("➕ Add New Project"):
+    with st.expander("➕ Add Project"):
         with st.form("new_project"):
-            title = st.text_input("Project Title *")
-            desc = st.text_area("Description", height=80)
-            selected_goal = st.selectbox("Link to Goal", ["None"] + list(goal_options.keys()))
-            deadline = st.date_input("Deadline (optional)")
-            submitted = st.form_submit_button("Create Project")
-            if submitted and title:
-                result = api_post("/projects", {
-                    "title": title,
-                    "description": desc,
-                    "goal_id": goal_options.get(selected_goal) if selected_goal != "None" else None,
-                    "deadline": str(deadline) + "T00:00:00" if deadline else None
+            title = st.text_input("Title *")
+            desc = st.text_area("Description", height=70)
+            goal_sel = st.selectbox("Goal", ["None"] + list(goal_options.keys()))
+            deadline = st.date_input("Deadline")
+            if st.form_submit_button("Create Project") and title:
+                r = api_post("/projects", {
+                    "title": title, "description": desc,
+                    "goal_id": goal_options.get(goal_sel) if goal_sel != "None" else None,
+                    "deadline": str(deadline) + "T00:00:00"
                 })
-                if result:
-                    st.success(f"✅ Project '{title}' created!")
+                if r:
+                    st.success("✅ Project created!")
                     st.rerun()
 
     projects = api_get("/projects") or []
-    goal_map = {g["id"]: g["title"] for g in goals}
     for p in projects:
-        status_emoji = {"active": "🟢", "completed": "✅", "on_hold": "⏸️"}.get(p["status"], "⚪")
-        linked_goal = goal_map.get(p.get("goal_id"), "No goal")
-        with st.expander(f"{status_emoji} {p['title']} → {linked_goal}"):
-            st.markdown(f"**Description:** {p['description'] or 'None'}")
-            st.markdown(f"**Deadline:** {p['deadline'][:10] if p['deadline'] else 'None'}")
+        emoji = {"active": "🟢", "completed": "✅", "on_hold": "⏸️"}.get(p["status"], "⚪")
+        with st.expander(f"{emoji} {p['title']} → {goal_map.get(p.get('goal_id'), 'No goal')}"):
+            st.markdown(p.get("description") or "")
+            st.caption(f"Deadline: {p['deadline'][:10] if p['deadline'] else 'None'}")
+
+
+# ══════════════════════════════════════════════════════════
+# INSIGHTS
+# ══════════════════════════════════════════════════════════
+elif page == "💡 Insights":
+    st.title("💡 AI Insights")
+    st.caption("AI-generated insights based on your actual activity data.")
+
+    if st.button("🔮 Generate Fresh Insights", use_container_width=True):
+        with st.spinner("Analyzing your data with AI..."):
+            insights = api_get("/insights")
+            if insights:
+                type_icons = {
+                    "productivity": "⚡", "learning": "📚",
+                    "goal_progress": "🎯", "recommendation": "💡"
+                }
+                for ins in insights:
+                    icon = type_icons.get(ins.get("type", ""), "🔹")
+                    st.markdown(f"""
+<div class="insight-card">
+<div class="type-badge">{icon} {ins.get('type', '').replace('_', ' ').title()}</div>
+<div>{ins.get('content', '')}</div>
+</div>""", unsafe_allow_html=True)
+
+    st.divider()
+    st.subheader("📜 Past Insights")
+    history = api_get("/insights/history") or []
+    type_icons = {"productivity": "⚡", "learning": "📚", "goal_progress": "🎯", "recommendation": "💡"}
+    for ins in history[:10]:
+        icon = type_icons.get(ins.get("insight_type", ""), "🔹")
+        st.markdown(f"""
+<div class="insight-card">
+<div class="type-badge">{icon} {ins.get('insight_type','').replace('_',' ').title()} · {ins.get('generated_at','')[:10]}</div>
+<div>{ins.get('content','')}</div>
+</div>""", unsafe_allow_html=True)
+
+
+# ══════════════════════════════════════════════════════════
+# ANALYTICS
+# ══════════════════════════════════════════════════════════
+elif page == "📈 Analytics":
+    st.title("📈 Analytics")
+
+    goals = api_get("/goals") or []
+    tasks = api_get("/tasks") or []
+    projects = api_get("/projects") or []
+
+    if not tasks and not goals:
+        st.info("Add some goals and tasks to see your analytics!")
+        st.stop()
+
+    # ── Row 1: Quick metrics ──────────────────────────────
+    total = len(tasks)
+    completed = [t for t in tasks if t["status"] == "completed"]
+    pending = [t for t in tasks if t["status"] == "pending"]
+    in_progress = [t for t in tasks if t["status"] == "in_progress"]
+    active_goals = [g for g in goals if g["status"] == "active"]
+
+    c1, c2, c3, c4 = st.columns(4)
+    for col, label, val in zip(
+        [c1, c2, c3, c4],
+        ["Total Tasks", "Completed", "In Progress", "Active Goals"],
+        [total, len(completed), len(in_progress), len(active_goals)]
+    ):
+        col.markdown(f'<div class="metric-card"><h4>{label}</h4><p>{val}</p></div>',
+                     unsafe_allow_html=True)
+
+    st.divider()
+
+    col_a, col_b = st.columns(2)
+
+    with col_a:
+        # Task Status Donut
+        if tasks:
+            status_counts = {
+                "Completed": len(completed),
+                "In Progress": len(in_progress),
+                "Pending": len(pending),
+            }
+            fig = go.Figure(data=[go.Pie(
+                labels=list(status_counts.keys()),
+                values=list(status_counts.values()),
+                hole=0.55,
+                marker_colors=["#6c63ff", "#f0a500", "#444466"]
+            )])
+            fig.update_layout(
+                title="Task Status Breakdown",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font_color="#c0c0ff",
+                showlegend=True,
+                margin=dict(t=40, b=0, l=0, r=0)
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+    with col_b:
+        # Goal Progress Bars
+        if goals and tasks:
+            goal_map = {g["id"]: g["title"] for g in goals}
+            goal_total = {}
+            goal_done = {}
+            for t in tasks:
+                gid = t.get("goal_id")
+                if gid:
+                    goal_total[gid] = goal_total.get(gid, 0) + 1
+                    if t["status"] == "completed":
+                        goal_done[gid] = goal_done.get(gid, 0) + 1
+
+            goal_names, goal_pcts = [], []
+            for gid, total_count in goal_total.items():
+                done = goal_done.get(gid, 0)
+                pct = round(done / total_count * 100, 1) if total_count > 0 else 0
+                goal_names.append(goal_map.get(gid, f"Goal {gid}")[:25])
+                goal_pcts.append(pct)
+
+            if goal_names:
+                fig2 = go.Figure(go.Bar(
+                    x=goal_pcts, y=goal_names,
+                    orientation='h',
+                    marker_color="#6c63ff",
+                    text=[f"{p}%" for p in goal_pcts],
+                    textposition='outside'
+                ))
+                fig2.update_layout(
+                    title="Goal Progress %",
+                    xaxis=dict(range=[0, 110], showgrid=False),
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    font_color="#c0c0ff",
+                    margin=dict(t=40, b=0, l=0, r=60)
+                )
+                st.plotly_chart(fig2, use_container_width=True)
+
+    st.divider()
+
+    # Task Score Distribution
+    if tasks:
+        impact_scores = [t["impact_score"] for t in tasks]
+        urgency_scores = [t["urgency_score"] for t in tasks]
+        titles = [t["title"][:20] + ("..." if len(t["title"]) > 20 else "") for t in tasks]
+
+        fig3 = go.Figure()
+        fig3.add_trace(go.Scatter(
+            x=urgency_scores, y=impact_scores,
+            mode="markers+text",
+            text=titles,
+            textposition="top center",
+            marker=dict(
+                size=12, color=impact_scores,
+                colorscale="Viridis", showscale=True,
+                colorbar=dict(title="Impact")
+            )
+        ))
+        fig3.update_layout(
+            title="Task Priority Matrix (Urgency vs Impact)",
+            xaxis_title="Urgency", yaxis_title="Impact",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font_color="#c0c0ff",
+            margin=dict(t=40, b=40, l=40, r=40)
+        )
+        st.plotly_chart(fig3, use_container_width=True)
 
 
 # ══════════════════════════════════════════════════════════
@@ -346,8 +594,6 @@ elif page == "📁 Projects":
 # ══════════════════════════════════════════════════════════
 elif page == "📊 Weekly Review":
     st.title("📊 Weekly Review")
-    st.caption("AI-generated summary of your week's progress.")
-
     if st.button("🔄 Generate This Week's Review", use_container_width=True):
         with st.spinner("Analyzing your week..."):
             result = api_get("/ai/weekly-review")
@@ -356,5 +602,6 @@ elif page == "📊 Weekly Review":
                 c1.metric("Tasks Completed", result["tasks_completed"])
                 c2.metric("Completion Rate", f"{result['completion_percentage']}%")
                 c3.metric("Most Active Goal", result["most_active_goal"] or "N/A")
-                st.markdown("---")
-                st.markdown(f'<div class="coach-box">{result["ai_summary"]}</div>', unsafe_allow_html=True)
+                st.divider()
+                st.markdown(f'<div class="coach-box">{result["ai_summary"]}</div>',
+                            unsafe_allow_html=True)

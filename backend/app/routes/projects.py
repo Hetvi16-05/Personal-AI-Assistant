@@ -2,16 +2,21 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database.db import get_db
 from app.models import Project
+from app.models.user import User
 from app.schemas.project import ProjectCreate, ProjectUpdate, ProjectOut
-from app.config import settings
+from app.auth.dependencies import get_current_user
 from typing import List
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
 
 
 @router.post("", response_model=ProjectOut, status_code=201)
-def create_project(payload: ProjectCreate, db: Session = Depends(get_db)):
-    project = Project(user_id=settings.DEFAULT_USER_ID, **payload.model_dump())
+def create_project(
+    payload: ProjectCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    project = Project(user_id=current_user.id, **payload.model_dump())
     db.add(project)
     db.commit()
     db.refresh(project)
@@ -19,14 +24,21 @@ def create_project(payload: ProjectCreate, db: Session = Depends(get_db)):
 
 
 @router.get("", response_model=List[ProjectOut])
-def list_projects(db: Session = Depends(get_db)):
-    return db.query(Project).filter(Project.user_id == settings.DEFAULT_USER_ID).all()
+def list_projects(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    return db.query(Project).filter(Project.user_id == current_user.id).all()
 
 
 @router.get("/{project_id}", response_model=ProjectOut)
-def get_project(project_id: int, db: Session = Depends(get_db)):
+def get_project(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     project = db.query(Project).filter(
-        Project.id == project_id, Project.user_id == settings.DEFAULT_USER_ID
+        Project.id == project_id, Project.user_id == current_user.id
     ).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found.")
@@ -34,9 +46,14 @@ def get_project(project_id: int, db: Session = Depends(get_db)):
 
 
 @router.patch("/{project_id}", response_model=ProjectOut)
-def update_project(project_id: int, payload: ProjectUpdate, db: Session = Depends(get_db)):
+def update_project(
+    project_id: int,
+    payload: ProjectUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     project = db.query(Project).filter(
-        Project.id == project_id, Project.user_id == settings.DEFAULT_USER_ID
+        Project.id == project_id, Project.user_id == current_user.id
     ).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found.")

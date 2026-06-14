@@ -1,140 +1,181 @@
-# Personal AI Assistant
+# Personal AI Assistant v2.0
 
-An AI-powered personal mentor with persistent memory, goal planning, Next Best Action engine, and a Streamlit UI — built with **FastAPI + SQLite + Google Gemini**.
+> Production-ready AI mentor with persistent memory, pgvector long-term memory, JWT auth, multi-user isolation, agent layer, analytics, and Docker deployment.
+
+**Stack:** FastAPI · Supabase PostgreSQL · pgvector · Gemini 2.5 Flash · Streamlit · Docker · Railway
 
 ---
 
 ## Architecture
 
 ```
-Personal-AI-Assistant/
-├── backend/
-│   ├── app/
-│   │   ├── main.py              ← FastAPI entry point
-│   │   ├── config.py            ← Settings (env vars)
-│   │   ├── database/db.py       ← SQLAlchemy engine
-│   │   ├── models/              ← ORM models (8 tables)
-│   │   ├── schemas/             ← Pydantic schemas
-│   │   ├── routes/              ← API routers
-│   │   ├── services/            ← Business logic + AI services
-│   │   └── ai/llm.py            ← Gemini LLM wrapper
-│   ├── seed.py                  ← Sample data
-│   ├── requirements.txt
-│   └── .env.example
-│
-└── frontend/
-    ├── app.py                   ← Streamlit UI
-    └── requirements.txt
+User (Browser)
+     │
+     ▼
+Streamlit Frontend (Login, Chat, Goals, Analytics, Insights)
+     │ JWT Bearer Token
+     ▼
+FastAPI Backend
+     ├── Auth Layer (JWT + bcrypt)
+     ├── Routes (goals / tasks / projects / chat / insights / ai)
+     │
+     ├── Agent Layer ──────────────────────────────────────────────┐
+     │   ├── PlannerAgent           Roadmap generation             │
+     │   ├── MemoryAgent            Structured + vector context    │
+     │   └── RecommendationAgent    NBA Engine V2                  │
+     │                                                              │
+     ├── Services                                                   │
+     │   ├── MemoryService          Structured context builder     │
+     │   ├── VectorMemoryService    pgvector embed + retrieve      │
+     │   ├── GoalPlannerService     AI roadmap + milestones        │
+     │   ├── RecommendationService  Dynamic scoring engine         │
+     │   ├── InsightService         4-type AI insight generation   │
+     │   ├── DailyCoachService      Morning AI briefing            │
+     │   └── WeeklyReviewService    Performance report             │
+     │                                                              │
+     └── Database (Supabase PostgreSQL + pgvector) ◄───────────────┘
+          users, goals, projects, tasks, user_memory
+          chat_sessions, chat_messages
+          memory_embeddings (vector 768-dim)
+          ai_insights, roadmaps, milestones, weekly_reports
 ```
+
+---
+
+## NBA Engine V2 Scoring
+
+```python
+score = (
+    impact     * 0.35 +
+    urgency    * 0.25 +
+    alignment  * 0.20 +
+    effort_match * 0.10 +
+    focus_score  * 0.05 +
+    consistency  * 0.05
+)
+```
+
+Also returns: `why_it_matters`, `estimated_impact`, `productivity_score`, `consistency_score`
 
 ---
 
 ## Quick Start
 
-### 1. Set up environment
+### 1. Clone + virtual env
 
 ```bash
+git clone https://github.com/Hetvi16-05/Personal-AI-Assistant
 cd Personal-AI-Assistant
-python -m venv venv
-source venv/bin/activate
+python -m venv venv && source venv/bin/activate
 ```
 
-### 2. Install backend dependencies
+### 2. Install dependencies
 
 ```bash
 pip install -r backend/requirements.txt
+pip install -r frontend/requirements.txt
 ```
 
 ### 3. Configure environment
 
 ```bash
 cp backend/.env.example backend/.env
-# Edit backend/.env — add your GEMINI_API_KEY
+# Edit backend/.env — add your real GEMINI_API_KEY and DATABASE_URL
 ```
 
-Get a free Gemini API key at: https://aistudio.google.com/app/apikey
+### 4. Supabase Setup (one-time)
 
-### 4. Seed the database
+In Supabase SQL Editor, run:
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+```
 
+Then run migrations:
 ```bash
 cd backend
-python seed.py
+alembic upgrade head
 ```
 
-### 5. Start the API server
+### 5. Start backend
 
 ```bash
 cd backend
 uvicorn app.main:app --reload
 ```
 
-API runs at: http://localhost:8000  
-Swagger docs: http://localhost:8000/docs
-
-### 6. Start the Streamlit frontend
-
-In a new terminal:
+### 6. Start frontend
 
 ```bash
 cd frontend
-pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Frontend runs at: http://localhost:8501
+---
+
+## Docker (local)
+
+```bash
+docker-compose up --build
+```
+
+| Service | URL |
+|---------|-----|
+| API | http://localhost:8000 |
+| Swagger | http://localhost:8000/docs |
+| Frontend | http://localhost:8501 |
+
+---
+
+## Deploy to Production
+
+| Component | Platform | Notes |
+|-----------|----------|-------|
+| Backend | Railway | Set all env vars from `.env` |
+| Database | Supabase | Already configured |
+| Frontend | Streamlit Cloud | Set `API_URL=https://your-railway-url` |
+| LLM | Gemini 2.5 Flash | Free tier |
 
 ---
 
 ## API Endpoints
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | /users | Create user profile |
-| GET | /users/me | Get profile |
-| PATCH | /users/me | Update profile |
-| POST | /goals | Create goal |
-| GET | /goals | List goals |
-| GET | /goals/{id} | Get goal |
-| DELETE | /goals/{id} | Delete goal |
-| POST | /projects | Create project |
-| GET | /projects | List projects |
-| POST | /tasks | Create task |
-| GET | /tasks | List tasks |
-| PATCH | /tasks/{id} | Update task |
-| DELETE | /tasks/{id} | Delete task |
-| POST | /ai/generate-roadmap | AI roadmap generator |
-| GET | /ai/next-action | Next Best Action engine |
-| GET | /ai/daily-coach | Daily AI briefing |
-| GET | /ai/weekly-review | Weekly review + report |
-| POST | /ai/chat | Free-form AI chat |
-
----
-
-## Next Best Action Formula
-
-```python
-score = (
-    impact * 0.4 +
-    urgency * 0.3 +
-    alignment * 0.2 +
-    effort_match * 0.1
-)
-```
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | /auth/register | ❌ | Create account |
+| POST | /auth/login | ❌ | Get JWT token |
+| GET | /auth/me | ✅ | Current user |
+| GET | /goals | ✅ | List goals |
+| POST | /goals | ✅ | Create goal |
+| GET | /tasks | ✅ | List tasks |
+| POST | /tasks | ✅ | Create task |
+| GET | /projects | ✅ | List projects |
+| POST | /chat/sessions | ✅ | New chat session |
+| POST | /chat/sessions/{id}/messages | ✅ | Send message (stores + AI responds) |
+| GET | /ai/next-action | ✅ | NBA Engine V2 |
+| GET | /ai/daily-coach | ✅ | Morning briefing |
+| GET | /ai/weekly-review | ✅ | Weekly report |
+| POST | /ai/generate-roadmap | ✅ | Goal roadmap |
+| GET | /insights | ✅ | Generate AI insights |
+| GET | /health | ❌ | Health check |
 
 ---
 
 ## Status
 
-In Development 🚀
-
 | Feature | Status |
 |---------|--------|
 | FastAPI Backend | ✅ |
-| SQLite Database | ✅ |
-| Memory System | ✅ |
-| Goal Planner (AI) | ✅ |
-| Task Manager | ✅ |
-| Next Best Action Engine | ✅ |
-| Daily AI Coach | ✅ |
+| Supabase PostgreSQL | ✅ |
+| Alembic Migrations | ✅ |
+| JWT Authentication | ✅ |
+| Multi-User Isolation | ✅ |
+| pgvector Long-Term Memory | ✅ |
+| Agent Layer (3 agents) | ✅ |
+| Chat Memory (Sessions) | ✅ |
+| NBA Engine V2 | ✅ |
+| AI Insights Engine | ✅ |
+| Analytics Dashboard (Plotly) | ✅ |
+| Daily Coach | ✅ |
 | Weekly Review | ✅ |
+| Docker | ✅ |
 | Streamlit Frontend | ✅ |

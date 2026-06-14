@@ -2,10 +2,13 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 from app.config import settings
 
-engine = create_engine(
-    settings.DATABASE_URL,
-    connect_args={"check_same_thread": False}  # SQLite only
-)
+# psycopg v3 uses postgresql+psycopg:// dialect
+db_url = settings.DATABASE_URL
+if db_url.startswith("postgresql://") or db_url.startswith("postgres://"):
+    db_url = db_url.replace("postgresql://", "postgresql+psycopg://", 1)
+    db_url = db_url.replace("postgres://", "postgresql+psycopg://", 1)
+
+engine = create_engine(db_url)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -23,6 +26,6 @@ def get_db():
 
 
 def init_db():
-    """Create all tables."""
-    from app.models import user, goal, project, task, memory, roadmap, report  # noqa
+    """Create all tables (used for local SQLite fallback only)."""
+    from app.models import user, goal, project, task, memory, roadmap, report, chat, vector_memory, insight  # noqa
     Base.metadata.create_all(bind=engine)
