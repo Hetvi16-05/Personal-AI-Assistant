@@ -1,9 +1,10 @@
+
 import google.generativeai as genai
 from app.config import settings
 
 genai.configure(api_key=settings.GEMINI_API_KEY)
 
-_model = genai.GenerativeModel("gemini-1.5-flash")
+_model = genai.GenerativeModel("gemini-2.5-flash")
 
 
 def ask_llm(prompt: str, system_hint: str = "") -> str:
