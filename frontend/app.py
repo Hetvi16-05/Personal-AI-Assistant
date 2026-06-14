@@ -24,13 +24,13 @@ html, body, [class*="css"] {
 
 /* Moving background gradient */
 @keyframes gradient-move {
-    0% { background: radial-gradient(circle at 15% 25%, rgba(30, 20, 50, 1) 0%, rgba(10, 10, 22, 1) 90%); }
-    50% { background: radial-gradient(circle at 85% 75%, rgba(20, 15, 42, 1) 0%, rgba(8, 8, 18, 1) 90%); }
-    100% { background: radial-gradient(circle at 15% 25%, rgba(30, 20, 50, 1) 0%, rgba(10, 10, 22, 1) 90%); }
+    0% { background: radial-gradient(circle at 15% 25%, rgba(30, 20, 50, 1) 0%, rgba(10, 10, 22, 1) 90%) !important; }
+    50% { background: radial-gradient(circle at 85% 75%, rgba(20, 15, 42, 1) 0%, rgba(8, 8, 18, 1) 90%) !important; }
+    100% { background: radial-gradient(circle at 15% 25%, rgba(30, 20, 50, 1) 0%, rgba(10, 10, 22, 1) 90%) !important; }
 }
 
-.stApp {
-    animation: gradient-move 18s ease infinite;
+.stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"], [data-testid="stSidebar"] {
+    animation: gradient-move 18s ease infinite !important;
 }
 
 /* Page fade-in entry animation */
@@ -152,18 +152,7 @@ html, body, [class*="css"] {
     margin-bottom: 0.5rem;
 }
 
-/* Login/Register Panel */
-.login-box {
-    max-width: 440px;
-    margin: 4rem auto;
-    background: rgba(255, 255, 255, 0.03);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 24px;
-    padding: 3rem 2.5rem;
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
-}
+
 
 /* Custom styles for native Streamlit buttons */
 div.stButton > button {
@@ -240,52 +229,65 @@ def api_patch(path: str, data: dict):
 # AUTH — Login / Register
 # ══════════════════════════════════════════════════════════
 def show_auth():
-    st.markdown('<div class="login-box">', unsafe_allow_html=True)
-    st.markdown("## 🧠 Personal AI Assistant")
-    st.markdown("Your AI-powered personal mentor")
-    st.divider()
+    with st.container(border=True):
+        st.markdown("<h2 style='text-align: center; margin-bottom: 0.2rem;'>🧠 Personal AI Assistant</h2>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; color: #b0b0d0;'>Your AI-powered personal mentor</p>", unsafe_allow_html=True)
+        st.divider()
 
-    tab_login, tab_register = st.tabs(["Login", "Register"])
+        tab_login, tab_register = st.tabs(["Login", "Register"])
 
-    with tab_login:
-        with st.form("login_form"):
-            email = st.text_input("Email", placeholder="you@example.com")
-            password = st.text_input("Password", type="password")
-            submitted = st.form_submit_button("Login", use_container_width=True)
-            if submitted and email and password:
-                result = api_post("/auth/login", {"email": email, "password": password})
-                if result:
-                    st.session_state.token = result["access_token"]
-                    st.session_state.user = result["user"]
-                    st.success("Welcome back!")
-                    st.rerun()
+        with tab_login:
+            with st.form("login_form"):
+                email = st.text_input("Email", placeholder="you@example.com")
+                password = st.text_input("Password", type="password")
+                submitted = st.form_submit_button("Login", use_container_width=True)
+                if submitted and email and password:
+                    result = api_post("/auth/login", {"email": email, "password": password})
+                    if result:
+                        st.session_state.token = result["access_token"]
+                        st.session_state.user = result["user"]
+                        st.success("Welcome back!")
+                        st.rerun()
 
-    with tab_register:
-        with st.form("register_form"):
-            name = st.text_input("Your Name")
-            email = st.text_input("Email", placeholder="you@example.com")
-            password = st.text_input("Password", type="password")
-            skills = st.text_input("Skills (optional)", placeholder="Python, Statistics")
-            interests = st.text_input("Interests (optional)", placeholder="AI, ML, GATE")
-            submitted = st.form_submit_button("Create Account", use_container_width=True)
-            if submitted and name and email and password:
-                result = api_post("/auth/register", {
-                    "name": name, "email": email, "password": password,
-                    "skills": skills, "interests": interests
-                })
-                if result:
-                    st.session_state.token = result["access_token"]
-                    st.session_state.user = result["user"]
-                    st.success("Account created!")
-                    st.rerun()
-
-    st.markdown('</div>', unsafe_allow_html=True)
+        with tab_register:
+            with st.form("register_form"):
+                name = st.text_input("Your Name")
+                email = st.text_input("Email", placeholder="you@example.com")
+                password = st.text_input("Password", type="password")
+                skills = st.text_input("Skills (optional)", placeholder="Python, Statistics")
+                interests = st.text_input("Interests (optional)", placeholder="AI, ML, GATE")
+                submitted = st.form_submit_button("Create Account", use_container_width=True)
+                if submitted and name and email and password:
+                    result = api_post("/auth/register", {
+                        "name": name, "email": email, "password": password,
+                        "skills": skills, "interests": interests
+                    })
+                    if result:
+                        st.session_state.token = result["access_token"]
+                        st.session_state.user = result["user"]
+                        st.success("Account created!")
+                        st.rerun()
 
 
 # ══════════════════════════════════════════════════════════
 # MAIN APP
 # ══════════════════════════════════════════════════════════
 if not st.session_state.get("token"):
+    st.markdown("""
+    <style>
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        max-width: 440px;
+        margin: 4rem auto;
+        background: rgba(255, 255, 255, 0.03) !important;
+        backdrop-filter: blur(16px) !important;
+        -webkit-backdrop-filter: blur(16px) !important;
+        border: 1px solid rgba(123, 44, 191, 0.2) !important;
+        border-radius: 24px !important;
+        padding: 3rem 2.5rem !important;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4) !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
     show_auth()
     st.stop()
 
