@@ -12,9 +12,11 @@ class Settings(BaseSettings):
     JWT_SECRET_KEY: str = "change-this-in-production"
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    DEFAULT_USER_ID: int = 1
 
     class Config:
         env_file = ".env"
+        extra = "ignore"
 
 
 settings = Settings()

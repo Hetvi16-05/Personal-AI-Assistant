@@ -3,6 +3,8 @@ import httpx
 import os
 import plotly.graph_objects as go
 import plotly.express as px
+import calendar
+from datetime import datetime, date, timedelta
 
 API = os.getenv("API_URL", "http://localhost:8000")
 
@@ -318,7 +320,7 @@ with st.sidebar:
     page = st.radio(
         "Navigate",
         ["🏠 Dashboard", "💬 Chat", "🎯 Goals", "📋 Tasks",
-         "📁 Projects", "💡 Insights", "📈 Analytics", "📊 Weekly Review"],
+         "📁 Projects", "📅 Daily Challenges", "💡 Insights", "📈 Analytics", "📊 Weekly Review"],
         label_visibility="collapsed"
     )
 
@@ -557,6 +559,200 @@ elif page == "📁 Projects":
         with st.expander(f"{emoji} {p['title']} → {goal_map.get(p.get('goal_id'), 'No goal')}"):
             st.markdown(p.get("description") or "")
             st.caption(f"Deadline: {p['deadline'][:10] if p['deadline'] else 'None'}")
+
+
+# ══════════════════════════════════════════════════════════
+# DAILY CHALLENGES
+# ══════════════════════════════════════════════════════════
+elif page == "📅 Daily Challenges":
+    st.title("📅 30-Day Daily Challenges")
+    st.caption("Form habits by tracking daily tasks over a 7, 14, 21, or 30-day period. Maintain your streak and build consistency!")
+
+    # Expandable form to create a new challenge
+    with st.expander("➕ Start New Challenge"):
+        with st.form("new_challenge"):
+            title = st.text_input("Challenge Title * (e.g., 30 Days of Code, Daily Reading)")
+            desc = st.text_area("Description / Motivation", height=70)
+            
+            c_col1, c_col2 = st.columns(2)
+            with c_col1:
+                duration_type = st.selectbox(
+                    "Select Duration",
+                    ["30 Days (Standard)", "7 Days", "14 Days", "21 Days", "Current Month", "Custom"]
+                )
+            with c_col2:
+                custom_days = st.number_input("Custom Duration (1-31 Days)", 1, 31, 30)
+                
+            start_date_input = st.date_input("Start Date", date.today())
+            
+            if st.form_submit_button("Start Challenge") and title:
+                # Resolve duration_days
+                if duration_type == "30 Days (Standard)":
+                    duration_days = 30
+                elif duration_type == "7 Days":
+                    duration_days = 7
+                elif duration_type == "14 Days":
+                    duration_days = 14
+                elif duration_type == "21 Days":
+                    duration_days = 21
+                elif duration_type == "Current Month":
+                    duration_days = calendar.monthrange(start_date_input.year, start_date_input.month)[1]
+                else:
+                    duration_days = int(custom_days)
+                    
+                payload = {
+                    "title": title,
+                    "description": desc,
+                    "duration_days": duration_days,
+                    "start_date": str(start_date_input)
+                }
+                r = api_post("/habits", payload)
+                if r:
+                    st.success("✅ Daily Challenge started! Go get it!")
+                    st.rerun()
+
+    # Get summary analytics
+    summary = api_get("/habits/analytics/summary")
+    
+    if not summary or not summary.get("habits"):
+        st.info("No active challenges. Click 'Start New Challenge' above to begin your journey!")
+    else:
+        # ── Row 1: Summary Metrics ──────────────────────────
+        s_col1, s_col2, s_col3, s_col4 = st.columns(4)
+        s_col1.markdown(f'<div class="metric-card"><h4>Total Challenges</h4><p>{summary["total_habits"]}</p></div>', unsafe_allow_html=True)
+        s_col2.markdown(f'<div class="metric-card"><h4>Active</h4><p>{summary["active_habits"]}</p></div>', unsafe_allow_html=True)
+        s_col3.markdown(f'<div class="metric-card"><h4>Completed</h4><p>{summary["completed_habits"]}</p></div>', unsafe_allow_html=True)
+        s_col4.markdown(f'<div class="metric-card"><h4>Avg Completion</h4><p>{summary["avg_completion_rate"]}%</p></div>', unsafe_allow_html=True)
+        
+        st.divider()
+        
+        # ── Row 2: List of Challenges ────────────────────────
+        st.subheader("Your Challenges")
+        for h in summary["habits"]:
+            habit_id = h["habit_id"]
+            start_date_val = date.fromisoformat(h["start_date"])
+            end_date_val = start_date_val + timedelta(days=h["duration_days"] - 1)
+            
+            # Format challenge card header
+            status_colors = {"active": "🟢 Active", "completed": "✅ Completed", "archived": "📁 Archived"}
+            status_lbl = status_colors.get(h["status"], h["status"].title())
+            
+            with st.container(border=True):
+                # Header row
+                h_col1, h_col2 = st.columns([4, 1])
+                with h_col1:
+                    st.markdown(f"### {h['title']}")
+                    st.markdown(f"**Period:** {start_date_val} to {end_date_val} ({h['duration_days']} Days) | **Status:** {status_lbl}")
+                with h_col2:
+                    # Toggles & Delete
+                    sub_col1, sub_col2 = st.columns(2)
+                    with sub_col1:
+                        # Toggle status button
+                        if h["status"] == "active" and date.today() > end_date_val:
+                            if st.button("🏁", key=f"complete_btn_{habit_id}", help="Mark as Completed"):
+                                api_patch(f"/habits/{habit_id}", {"status": "completed"})
+                                st.rerun()
+                        elif h["status"] == "completed":
+                            if st.button("📁", key=f"archive_btn_{habit_id}", help="Archive Challenge"):
+                                api_patch(f"/habits/{habit_id}", {"status": "archived"})
+                                st.rerun()
+                    with sub_col2:
+                        if st.button("🗑", key=f"del_btn_{habit_id}", help="Delete Challenge"):
+                            httpx.delete(f"{API}/habits/{habit_id}", headers=get_headers())
+                            st.rerun()
+                
+                if h["description"]:
+                    st.caption(h["description"])
+                
+                # Metrics Row
+                m_col1, m_col2, m_col3, m_col4 = st.columns(4)
+                m_col1.metric("Current Streak", f"🔥 {h['current_streak']} days")
+                m_col2.metric("Longest Streak", f"🏆 {h['longest_streak']} days")
+                m_col3.metric("Completion Rate", f"{h['completion_rate']}%")
+                m_col4.metric("Days Checked", f"✅ {h['completed_days_count']} / {h['duration_days']}")
+                
+                # Progress Bar
+                st.progress(min(h["completion_rate"] / 100.0, 1.0))
+                
+                # Interactive Checkbox Grid
+                st.write("**Completion Calendar:**")
+                
+                # Grid columns
+                grid_cols_count = 7
+                grid_cols = st.columns(grid_cols_count)
+                
+                # history dates set
+                history_set = {date.fromisoformat(d) for d in h["history"]}
+                
+                for i in range(h["duration_days"]):
+                    curr_date = start_date_val + timedelta(days=i)
+                    is_future = curr_date > date.today()
+                    date_str = str(curr_date)
+                    checked = curr_date in history_set
+                    
+                    col_index = i % grid_cols_count
+                    with grid_cols[col_index]:
+                        label = f"Day {i+1} ({curr_date.strftime('%d %b')})"
+                        if is_future:
+                            # Show locked/future day
+                            st.checkbox(f"🔒 {label}", value=False, disabled=True, key=f"cb_{habit_id}_{i}")
+                        else:
+                            cb_val = st.checkbox(label, value=checked, key=f"cb_{habit_id}_{i}")
+                            if cb_val != checked:
+                                api_post(f"/habits/{habit_id}/log", {"date": date_str, "completed": cb_val})
+                                st.rerun()
+                                
+            st.write("") # spacing
+            
+        # ── Row 3: Analytics Graphs ──────────────────────────
+        st.divider()
+        st.subheader("📊 Analytics Overview")
+        
+        # Build Plotly charts
+        habit_names = [h["title"][:20] for h in summary["habits"]]
+        completion_rates = [h["completion_rate"] for h in summary["habits"]]
+        current_streaks = [h["current_streak"] for h in summary["habits"]]
+        longest_streaks = [h["longest_streak"] for h in summary["habits"]]
+        
+        col_g1, col_g2 = st.columns(2)
+        
+        with col_g1:
+            fig_rates = go.Figure(go.Bar(
+                x=completion_rates, y=habit_names,
+                orientation='h',
+                marker_color="#4cc9f0",
+                text=[f"{r}%" for r in completion_rates],
+                textposition='outside'
+            ))
+            fig_rates.update_layout(
+                title="Completion Rates %",
+                xaxis=dict(range=[0, 110], showgrid=False),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font_color="#c0c0ff",
+                margin=dict(t=40, b=0, l=0, r=60)
+            )
+            st.plotly_chart(fig_rates, use_container_width=True)
+            
+        with col_g2:
+            fig_streaks = go.Figure()
+            fig_streaks.add_trace(go.Bar(
+                x=habit_names, y=current_streaks, name="Current Streak",
+                marker_color="#f72585"
+            ))
+            fig_streaks.add_trace(go.Bar(
+                x=habit_names, y=longest_streaks, name="Longest Streak",
+                marker_color="#7b2cbf"
+            ))
+            fig_streaks.update_layout(
+                title="Streaks Comparison (Days)",
+                barmode='group',
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font_color="#c0c0ff",
+                margin=dict(t=40, b=40, l=40, r=40)
+            )
+            st.plotly_chart(fig_streaks, use_container_width=True)
 
 
 # ══════════════════════════════════════════════════════════

@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.database.db import init_db
 from app.routes import users, goals, projects, tasks, ai
-from app.routes import auth, chat, insights
+from app.routes import auth, chat, insights, habits
 
 # ── Logging ──────────────────────────────────────────────
 logging.basicConfig(
@@ -68,3 +68,4 @@ app.include_router(tasks.router)
 app.include_router(ai.router)
 app.include_router(chat.router)
 app.include_router(insights.router)
+app.include_router(habits.router)

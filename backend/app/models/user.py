@@ -24,3 +24,4 @@ class User(Base):
     chat_sessions = relationship("ChatSession", back_populates="user", cascade="all, delete")
     memory_embeddings = relationship("MemoryEmbedding", back_populates="user", cascade="all, delete")
     insights = relationship("AIInsight", back_populates="user", cascade="all, delete")
+    habits = relationship("DailyHabit", back_populates="user", cascade="all, delete-orphan")
