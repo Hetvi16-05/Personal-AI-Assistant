@@ -18,10 +18,10 @@ config = context.config
 
 # Override sqlalchemy.url with DATABASE_URL from environment
 raw_url = os.environ["DATABASE_URL"]
-# psycopg v3 requires postgresql+psycopg:// dialect
+# psycopg v2 requires postgresql+psycopg2:// dialect
 if raw_url.startswith("postgresql://") or raw_url.startswith("postgres://"):
-    raw_url = raw_url.replace("postgresql://", "postgresql+psycopg://", 1)
-    raw_url = raw_url.replace("postgres://", "postgresql+psycopg://", 1)
+    raw_url = raw_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+    raw_url = raw_url.replace("postgres://", "postgresql+psycopg2://", 1)
 config.set_main_option("sqlalchemy.url", raw_url)
 
 

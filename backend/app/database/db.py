@@ -2,11 +2,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 from app.config import settings
 
-# psycopg v3 uses postgresql+psycopg:// dialect
+# psycopg v2 uses postgresql+psycopg2:// dialect
 db_url = settings.DATABASE_URL
 if db_url.startswith("postgresql://") or db_url.startswith("postgres://"):
-    db_url = db_url.replace("postgresql://", "postgresql+psycopg://", 1)
-    db_url = db_url.replace("postgres://", "postgresql+psycopg://", 1)
+    db_url = db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+    db_url = db_url.replace("postgres://", "postgresql+psycopg2://", 1)
 
 engine = create_engine(db_url)
 
