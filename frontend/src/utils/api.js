@@ -15,8 +15,14 @@ export const apiGet = async (path) => {
       return null;
     }
     if (!res.ok) {
-      const errorData = await res.json();
-      throw new Error(errorData.detail || 'API request failed');
+      let errorMessage = 'API request failed';
+      try {
+        const errorData = await res.json();
+        errorMessage = errorData.detail || errorMessage;
+      } catch (e) {
+        errorMessage = `API request failed with status ${res.status}`;
+      }
+      throw new Error(errorMessage);
     }
     return await res.json();
   } catch (error) {
@@ -39,8 +45,14 @@ export const apiPost = async (path, data) => {
       return null;
     }
     if (!res.ok) {
-      const errorData = await res.json();
-      throw new Error(errorData.detail || 'API request failed');
+      let errorMessage = 'API request failed';
+      try {
+        const errorData = await res.json();
+        errorMessage = errorData.detail || errorMessage;
+      } catch (e) {
+        errorMessage = `API request failed with status ${res.status}`;
+      }
+      throw new Error(errorMessage);
     }
     return await res.json();
   } catch (error) {
@@ -63,8 +75,14 @@ export const apiPatch = async (path, data) => {
       return null;
     }
     if (!res.ok) {
-      const errorData = await res.json();
-      throw new Error(errorData.detail || 'API request failed');
+      let errorMessage = 'API request failed';
+      try {
+        const errorData = await res.json();
+        errorMessage = errorData.detail || errorMessage;
+      } catch (e) {
+        errorMessage = `API request failed with status ${res.status}`;
+      }
+      throw new Error(errorMessage);
     }
     return await res.json();
   } catch (error) {
@@ -86,8 +104,14 @@ export const apiDelete = async (path) => {
       return null;
     }
     if (!res.ok) {
-      const errorData = await res.json();
-      throw new Error(errorData.detail || 'API request failed');
+      let errorMessage = 'API request failed';
+      try {
+        const errorData = await res.json();
+        errorMessage = errorData.detail || errorMessage;
+      } catch (e) {
+        errorMessage = `API request failed with status ${res.status}`;
+      }
+      throw new Error(errorMessage);
     }
     return true;
   } catch (error) {
