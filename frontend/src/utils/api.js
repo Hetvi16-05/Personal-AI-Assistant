@@ -1,3 +1,9 @@
+const getBaseUrl = () => {
+  // If VITE_API_URL is configured (e.g. pointing to a Render backend), use it.
+  // Otherwise, default to relative "/api" (e.g. for unified hosting or local proxy).
+  return import.meta.env.VITE_API_URL || '/api';
+};
+
 const getHeaders = () => {
   const token = localStorage.getItem('token');
   return token ? { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
@@ -5,7 +11,7 @@ const getHeaders = () => {
 
 export const apiGet = async (path) => {
   try {
-    const res = await fetch(`/api${path}`, {
+    const res = await fetch(`${getBaseUrl()}${path}`, {
       headers: getHeaders(),
     });
     if (res.status === 401) {
@@ -33,7 +39,7 @@ export const apiGet = async (path) => {
 
 export const apiPost = async (path, data) => {
   try {
-    const res = await fetch(`/api${path}`, {
+    const res = await fetch(`${getBaseUrl()}${path}`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify(data),
@@ -63,7 +69,7 @@ export const apiPost = async (path, data) => {
 
 export const apiPatch = async (path, data) => {
   try {
-    const res = await fetch(`/api${path}`, {
+    const res = await fetch(`${getBaseUrl()}${path}`, {
       method: 'PATCH',
       headers: getHeaders(),
       body: JSON.stringify(data),
@@ -93,7 +99,7 @@ export const apiPatch = async (path, data) => {
 
 export const apiDelete = async (path) => {
   try {
-    const res = await fetch(`/api${path}`, {
+    const res = await fetch(`${getBaseUrl()}${path}`, {
       method: 'DELETE',
       headers: getHeaders(),
     });
