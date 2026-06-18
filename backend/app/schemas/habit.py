@@ -25,7 +25,7 @@ class HabitLogOut(BaseModel):
 class HabitCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=300)
     description: Optional[str] = ""
-    duration_days: int = Field(default=30, ge=1, le=31)
+    duration_days: int = Field(default=30, ge=1, le=365)
     start_date: Optional[date] = None
     subtasks: Optional[List[str]] = []
 

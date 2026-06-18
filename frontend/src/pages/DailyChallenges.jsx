@@ -18,9 +18,96 @@ export default function DailyChallenges() {
   const [newSubtask, setNewSubtask] = useState('');
   const [selectedDates, setSelectedDates] = useState({});
 
+  const [localLogs, setLocalLogs] = useState({});
+  const [reminderEnabled, setReminderEnabled] = useState(
+    localStorage.getItem('hourly_reminder') === 'true'
+  );
+
   useEffect(() => {
     fetchSummary();
   }, []);
+
+  useEffect(() => {
+    if (summary && summary.habits) {
+      const newLocalLogs = {};
+      summary.habits.forEach(h => {
+        h.logs?.forEach(log => {
+          const key = `${h.habit_id}_${log.date}`;
+          newLocalLogs[key] = log.completed_subtasks || [];
+        });
+      });
+      // Merge: server data is the base (fresh after save), user's unsaved edits on
+      // OTHER keys are preserved by only keeping prev entries not returned by server.
+      setLocalLogs(prev => {
+        const merged = { ...newLocalLogs };
+        Object.keys(prev).forEach(k => {
+          if (!(k in newLocalLogs)) {
+            merged[k] = prev[k]; // keep unsaved in-progress edits for new days
+          }
+        });
+        return merged;
+      });
+    }
+  }, [summary]);
+
+  const toggleReminder = () => {
+    const nextVal = !reminderEnabled;
+    setReminderEnabled(nextVal);
+    localStorage.setItem('hourly_reminder', nextVal ? 'true' : 'false');
+    
+    if (nextVal) {
+      if (Notification.permission === 'default' || Notification.permission === 'denied') {
+        Notification.requestPermission().then(permission => {
+          if (permission === 'granted') {
+            new Notification("🧠 Daily Challenges Reminder Enabled!", {
+              body: "You will be reminded every hour if there are pending daily challenges."
+            });
+            checkAndNotify(summary?.habits);
+          }
+        });
+      } else if (Notification.permission === 'granted') {
+        new Notification("🧠 Daily Challenges Reminder Enabled!", {
+          body: "You will be reminded every hour if there are pending daily challenges."
+        });
+        checkAndNotify(summary?.habits);
+      }
+    }
+  };
+
+  const checkAndNotify = (habitsList) => {
+    const todayStr = new Date().toISOString().substring(0, 10);
+    const pendingHabits = [];
+
+    habitsList?.forEach(h => {
+      if (h.status === 'active') {
+        const todayLog = h.logs?.find(log => log.date === todayStr);
+        if (!todayLog || !todayLog.completed) {
+          pendingHabits.push(h.title);
+        }
+      }
+    });
+
+    if (pendingHabits.length > 0) {
+      if (Notification.permission === 'granted') {
+        new Notification("🧠 Daily Challenges Reminder", {
+          body: `You still have pending challenges today: ${pendingHabits.join(', ')}. Click to check them off!`,
+        });
+      }
+    }
+  };
+
+  useEffect(() => {
+    let intervalId;
+    if (reminderEnabled && summary?.habits) {
+      // Check every 1 hour (3600000 ms)
+      intervalId = setInterval(() => {
+        checkAndNotify(summary.habits);
+      }, 3600000);
+    }
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [reminderEnabled, summary]);
 
   const fetchSummary = async () => {
     setLoading(true);
@@ -51,23 +138,29 @@ export default function DailyChallenges() {
     }
   };
 
-  const handleToggleSubtask = async (h, dateStr, subtaskTitle) => {
-    const selectedDate = getSelectedDate(h.habit_id);
-    const dateLog = h.logs?.find(log => log.date === selectedDate);
-    let currentCompleted = dateLog ? dateLog.completed_subtasks : [];
-    
-    let newCompleted;
-    if (currentCompleted.includes(subtaskTitle)) {
-      newCompleted = currentCompleted.filter(item => item !== subtaskTitle);
+  const handleLocalToggleSubtask = (habitId, dateStr, subtaskTitle) => {
+    const key = `${habitId}_${dateStr}`;
+    const current = localLogs[key] || [];
+    let next;
+    if (current.includes(subtaskTitle)) {
+      next = current.filter(t => t !== subtaskTitle);
     } else {
-      newCompleted = [...currentCompleted, subtaskTitle];
+      next = [...current, subtaskTitle];
     }
+    setLocalLogs({
+      ...localLogs,
+      [key]: next
+    });
+  };
 
+  const handleSaveCheckin = async (h, dateStr) => {
+    const key = `${h.habit_id}_${dateStr}`;
+    const completedSubtasks = localLogs[key] || [];
     try {
       const payload = {
         date: dateStr,
-        completed: newCompleted.length >= h.subtasks.length,
-        completed_subtasks: newCompleted
+        completed: completedSubtasks.length >= h.subtasks.length,
+        completed_subtasks: completedSubtasks
       };
       const result = await apiPost(`/habits/${h.habit_id}/log`, payload);
       if (result) {
@@ -209,10 +302,21 @@ export default function DailyChallenges() {
           <h1 style={{ fontSize: '2.2rem', fontWeight: 800 }}>📅 Daily Challenges</h1>
           <p className="text-muted">Form habits by tracking daily tasks. Maintain streaks and build consistency.</p>
         </div>
-        <button className="btn" onClick={() => setShowForm(!showForm)}>
-          <Plus size={16} />
-          {showForm ? 'Close' : 'Start Challenge'}
-        </button>
+        <div className="flex gap-3 items-center">
+          <button 
+            type="button"
+            className={`btn ${reminderEnabled ? '' : 'btn-secondary'}`}
+            onClick={toggleReminder}
+            style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }}
+            title={reminderEnabled ? "Hourly reminders are active" : "Enable hourly reminders"}
+          >
+            ⏰ {reminderEnabled ? 'Hourly Reminder Active' : 'Enable Hourly Reminder'}
+          </button>
+          <button className="btn" onClick={() => setShowForm(!showForm)}>
+            <Plus size={16} />
+            {showForm ? 'Close' : 'Start Challenge'}
+          </button>
+        </div>
       </div>
 
       {showForm && (
@@ -451,22 +555,36 @@ export default function DailyChallenges() {
                   <div style={{ height: '6px', background: 'rgba(255,255,255,0.05)', borderRadius: '3px', marginBottom: '1.5rem', overflow: 'hidden' }}>
                     <div style={{ height: '100%', width: `${Math.min(h.completion_rate, 100)}%`, background: 'linear-gradient(90deg, var(--primary-blue), var(--primary-purple))', transition: 'width 0.3s ease' }} />
                   </div>
-
                   {/* Interactive Sub-tasks Checklist for Selected Date */}
                   {h.subtasks && h.subtasks.length > 0 && (() => {
                     const selectedDate = getSelectedDate(h.habit_id);
-                    const dateLog = h.logs?.find(log => log.date === selectedDate);
-                    const completedSubtasksForDate = dateLog ? dateLog.completed_subtasks : [];
+                    const logKey = `${h.habit_id}_${selectedDate}`;
+                    const completedSubtasksForDate = localLogs[logKey] || [];
                     
+                    const dbLog = h.logs?.find(log => log.date === selectedDate);
+                    const dbCompleted = dbLog ? dbLog.completed_subtasks || [] : [];
+                    const isDirty = JSON.stringify([...dbCompleted].sort()) !== JSON.stringify([...completedSubtasksForDate].sort());
+
                     return (
                       <div className="subtasks-checklist-container mb-4" style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.05)', borderRadius: '10px', padding: '1.25rem' }}>
                         <div className="flex justify-between items-center mb-3">
                           <h4 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#fff' }}>
                             📝 Tasks for {new Date(selectedDate).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
                           </h4>
-                          <span className="text-muted" style={{ fontSize: '0.8rem', fontWeight: 600 }}>
-                            {completedSubtasksForDate.length} / {h.subtasks.length} Completed
-                          </span>
+                          <div className="flex items-center gap-3">
+                            <span className="text-muted" style={{ fontSize: '0.8rem', fontWeight: 600 }}>
+                              {completedSubtasksForDate.length} / {h.subtasks.length} Completed
+                            </span>
+                            {isDirty && (
+                              <button 
+                                className="btn"
+                                onClick={() => handleSaveCheckin(h, selectedDate)}
+                                style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem', background: 'linear-gradient(90deg, var(--primary-pink), var(--primary-purple))' }}
+                              >
+                                Save Check-in
+                              </button>
+                            )}
+                          </div>
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
                           {h.subtasks.map((st, sIdx) => {
@@ -476,7 +594,7 @@ export default function DailyChallenges() {
                                 <input
                                   type="checkbox"
                                   checked={isChecked}
-                                  onChange={() => handleToggleSubtask(h, selectedDate, st)}
+                                  onChange={() => handleLocalToggleSubtask(h.habit_id, selectedDate, st)}
                                   style={{ width: '16px', height: '16px', accentColor: 'var(--primary-blue)', cursor: 'pointer' }}
                                 />
                                 <span style={{ fontSize: '0.9rem', textDecoration: isChecked ? 'line-through' : 'none', color: isChecked ? 'var(--text-muted)' : '#e2e8f0', transition: 'all 0.2s' }}>
@@ -496,15 +614,15 @@ export default function DailyChallenges() {
                     {dates.map((dateObj, idx) => {
                       const dateStr = dateObj.toISOString().substring(0, 10);
                       const isFuture = isFutureDate(dateObj);
-                      const checked = historySet.has(dateStr);
                       const selectedDate = getSelectedDate(h.habit_id);
                       const isSelected = selectedDate === dateStr;
                       
                       const hasSubtasks = h.subtasks && h.subtasks.length > 0;
-                      const dateLog = h.logs?.find(log => log.date === dateStr);
-                      const completedCount = dateLog ? dateLog.completed_subtasks?.length || 0 : 0;
+                      const logKey = `${h.habit_id}_${dateStr}`;
+                      const completedCount = hasSubtasks ? (localLogs[logKey]?.length || 0) : 0;
                       const totalSubtasks = hasSubtasks ? h.subtasks.length : 0;
                       const isPartiallyChecked = hasSubtasks && completedCount > 0 && completedCount < totalSubtasks;
+                      const checked = hasSubtasks ? (completedCount === totalSubtasks) : historySet.has(dateStr);
 
                       return (
                         <div

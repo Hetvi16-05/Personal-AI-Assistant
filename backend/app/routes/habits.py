@@ -211,7 +211,8 @@ def log_habit_completion(
     if not habit.subtasks:
         should_delete = not payload.completed
     else:
-        should_delete = not payload.completed_subtasks
+        # Only delete if completed_subtasks is explicitly None (not just empty list)
+        should_delete = payload.completed_subtasks is None
 
     if should_delete:
         if existing_log:
