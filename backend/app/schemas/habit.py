@@ -33,7 +33,7 @@ class HabitCreate(BaseModel):
 class HabitUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
-    duration_days: Optional[int] = Field(None, ge=1, le=31)
+    duration_days: Optional[int] = Field(None, ge=1, le=365)
     status: Optional[HabitStatus] = None
     subtasks: Optional[List[str]] = None
 
