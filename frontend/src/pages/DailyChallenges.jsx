@@ -19,6 +19,7 @@ export default function DailyChallenges() {
   const [selectedDates, setSelectedDates] = useState({});
 
   const [localLogs, setLocalLogs] = useState({});
+  const [savingKeys, setSavingKeys] = useState({}); // tracks which subtask rows are saving
   const [reminderEnabled, setReminderEnabled] = useState(
     localStorage.getItem('hourly_reminder') === 'true'
   );
@@ -138,36 +139,38 @@ export default function DailyChallenges() {
     }
   };
 
-  const handleLocalToggleSubtask = (habitId, dateStr, subtaskTitle) => {
-    const key = `${habitId}_${dateStr}`;
-    const current = localLogs[key] || [];
-    let next;
-    if (current.includes(subtaskTitle)) {
-      next = current.filter(t => t !== subtaskTitle);
-    } else {
-      next = [...current, subtaskTitle];
-    }
-    setLocalLogs({
-      ...localLogs,
-      [key]: next
-    });
-  };
-
-  const handleSaveCheckin = async (h, dateStr) => {
+  const handleToggleSubtask = async (h, dateStr, subtaskTitle) => {
     const key = `${h.habit_id}_${dateStr}`;
-    const completedSubtasks = localLogs[key] || [];
+    const current = localLogs[key] || [];
+    const next = current.includes(subtaskTitle)
+      ? current.filter(t => t !== subtaskTitle)
+      : [...current, subtaskTitle];
+
+    // Optimistic UI update
+    setLocalLogs(prev => ({ ...prev, [key]: next }));
+
+    // Mark this specific subtask as saving
+    const saveKey = `${key}_${subtaskTitle}`;
+    setSavingKeys(prev => ({ ...prev, [saveKey]: true }));
+
     try {
       const payload = {
         date: dateStr,
-        completed: completedSubtasks.length >= h.subtasks.length,
-        completed_subtasks: completedSubtasks
+        completed: next.length >= h.subtasks.length,
+        completed_subtasks: next
       };
-      const result = await apiPost(`/habits/${h.habit_id}/log`, payload);
-      if (result) {
-        fetchSummary();
-      }
+      await apiPost(`/habits/${h.habit_id}/log`, payload);
+      fetchSummary();
     } catch (err) {
       console.error(err);
+      // Revert optimistic update on error
+      setLocalLogs(prev => ({ ...prev, [key]: current }));
+    } finally {
+      setSavingKeys(prev => {
+        const copy = { ...prev };
+        delete copy[saveKey];
+        return copy;
+      });
     }
   };
 
@@ -569,37 +572,70 @@ export default function DailyChallenges() {
                       <div className="subtasks-checklist-container mb-4" style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.05)', borderRadius: '10px', padding: '1.25rem' }}>
                         <div className="flex justify-between items-center mb-3">
                           <h4 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#fff' }}>
-                            📝 Tasks for {new Date(selectedDate).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            📝 Tasks for {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
                           </h4>
-                          <div className="flex items-center gap-3">
-                            <span className="text-muted" style={{ fontSize: '0.8rem', fontWeight: 600 }}>
-                              {completedSubtasksForDate.length} / {h.subtasks.length} Completed
+                          <div className="flex items-center gap-2">
+                            {/* Progress pill */}
+                            <span style={{
+                              fontSize: '0.78rem', fontWeight: 700, padding: '0.2rem 0.65rem',
+                              borderRadius: '999px',
+                              background: completedSubtasksForDate.length === h.subtasks.length
+                                ? 'rgba(46,204,113,0.15)' : 'rgba(255,255,255,0.06)',
+                              color: completedSubtasksForDate.length === h.subtasks.length
+                                ? '#2ecc71' : 'var(--text-muted)',
+                              border: completedSubtasksForDate.length === h.subtasks.length
+                                ? '1px solid rgba(46,204,113,0.3)' : '1px solid rgba(255,255,255,0.08)'
+                            }}>
+                              {completedSubtasksForDate.length === h.subtasks.length ? '✅ All Done!' : `${completedSubtasksForDate.length} / ${h.subtasks.length}`}
                             </span>
-                            {isDirty && (
-                              <button 
-                                className="btn"
-                                onClick={() => handleSaveCheckin(h, selectedDate)}
-                                style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem', background: 'linear-gradient(90deg, var(--primary-pink), var(--primary-purple))' }}
-                              >
-                                Save Check-in
-                              </button>
-                            )}
                           </div>
                         </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                           {h.subtasks.map((st, sIdx) => {
                             const isChecked = completedSubtasksForDate.includes(st);
+                            const saveKey = `${h.habit_id}_${selectedDate}_${st}`;
+                            const isSaving = savingKeys[saveKey];
                             return (
-                              <label key={sIdx} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', margin: 0, userSelect: 'none', background: 'rgba(255,255,255,0.01)', padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.02)', transition: 'background 0.2s' }} className="subtask-item-label">
-                                <input
-                                  type="checkbox"
-                                  checked={isChecked}
-                                  onChange={() => handleLocalToggleSubtask(h.habit_id, selectedDate, st)}
-                                  style={{ width: '16px', height: '16px', accentColor: 'var(--primary-blue)', cursor: 'pointer' }}
-                                />
-                                <span style={{ fontSize: '0.9rem', textDecoration: isChecked ? 'line-through' : 'none', color: isChecked ? 'var(--text-muted)' : '#e2e8f0', transition: 'all 0.2s' }}>
+                              <label
+                                key={sIdx}
+                                onClick={() => !isSaving && handleToggleSubtask(h, selectedDate, st)}
+                                style={{
+                                  display: 'flex', alignItems: 'center', gap: '0.75rem',
+                                  cursor: isSaving ? 'wait' : 'pointer', margin: 0, userSelect: 'none',
+                                  padding: '0.65rem 0.9rem', borderRadius: '8px',
+                                  border: isChecked ? '1px solid rgba(46,204,113,0.25)' : '1px solid rgba(255,255,255,0.06)',
+                                  background: isChecked ? 'rgba(46,204,113,0.07)' : 'rgba(255,255,255,0.02)',
+                                  transition: 'all 0.2s', opacity: isSaving ? 0.7 : 1
+                                }}
+                              >
+                                {/* Custom styled checkbox */}
+                                <div style={{
+                                  width: '20px', height: '20px', borderRadius: '6px', flexShrink: 0,
+                                  border: isChecked ? '2px solid #2ecc71' : '2px solid rgba(255,255,255,0.25)',
+                                  background: isChecked ? '#2ecc71' : 'transparent',
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  transition: 'all 0.2s'
+                                }}>
+                                  {isSaving ? (
+                                    <span style={{ fontSize: '10px', animation: 'spin 1s linear infinite', display: 'inline-block' }}>⟳</span>
+                                  ) : isChecked ? (
+                                    <span style={{ color: '#fff', fontSize: '12px', fontWeight: 900 }}>✓</span>
+                                  ) : null}
+                                </div>
+                                <span style={{
+                                  fontSize: '0.9rem', flex: 1,
+                                  textDecoration: isChecked ? 'line-through' : 'none',
+                                  color: isChecked ? 'rgba(255,255,255,0.4)' : '#e2e8f0',
+                                  transition: 'all 0.2s'
+                                }}>
                                   {st}
                                 </span>
+                                {isChecked && !isSaving && (
+                                  <span style={{ fontSize: '0.72rem', color: '#2ecc71', fontWeight: 600 }}>Saved ✓</span>
+                                )}
+                                {isSaving && (
+                                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600 }}>Saving...</span>
+                                )}
                               </label>
                             );
                           })}

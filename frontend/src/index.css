@@ -254,6 +254,13 @@ body {
   100% { border-color: rgba(123, 44, 191, 0.35); box-shadow: 0 0 15px rgba(123, 44, 191, 0.08); }
 }
 
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+
+
 .action-box {
   background: linear-gradient(135deg, rgba(123, 44, 191, 0.1) 0%, rgba(58, 12, 163, 0.1) 100%);
   backdrop-filter: blur(10px);

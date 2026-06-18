@@ -49,6 +49,23 @@ def compute_analytics(habit: DailyHabit, db: Session) -> HabitAnalytics:
     completed_days_count = len(completed_dates)
     completion_rate = round((completed_days_count / habit.duration_days) * 100, 2)
 
+    # Explicitly serialize logs so Pydantic doesn't need to resolve @property from ORM
+    from app.schemas.habit import HabitLogOut as _HabitLogOut
+    logs_out = [
+        _HabitLogOut(
+            id=log.id,
+            habit_id=log.habit_id,
+            date=log.date,
+            completed=log.completed,
+            completed_subtasks=log.completed_subtasks,  # calls @property explicitly
+            created_at=log.created_at
+        )
+        for log in logs
+    ]
+
+    # Explicitly call habit.subtasks @property to get the Python list
+    subtasks_list = list(habit.subtasks)
+
     return HabitAnalytics(
         habit_id=habit.id,
         title=habit.title,
@@ -60,8 +77,8 @@ def compute_analytics(habit: DailyHabit, db: Session) -> HabitAnalytics:
         current_streak=current_streak,
         longest_streak=longest_streak,
         history=sorted_dates,
-        subtasks=habit.subtasks,
-        logs=logs
+        subtasks=subtasks_list,
+        logs=logs_out
     )
 
 

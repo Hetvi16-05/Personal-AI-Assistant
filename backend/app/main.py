@@ -1,4 +1,5 @@
 import logging
+import os
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -22,9 +23,14 @@ app = FastAPI(
 )
 
 # ── CORS ─────────────────────────────────────────────────
+# Set ALLOWED_ORIGINS env var in production (comma-separated Vercel URLs)
+# e.g. "https://saarthi-ai.vercel.app,https://saarthi-ai-git-main.vercel.app"
+_raw_origins = os.getenv("ALLOWED_ORIGINS", "*")
+allow_origins = [o.strip() for o in _raw_origins.split(",")] if _raw_origins != "*" else ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Lock to specific origins in production
+    allow_origins=allow_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
