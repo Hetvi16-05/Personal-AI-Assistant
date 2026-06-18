@@ -59,7 +59,9 @@ def compute_analytics(habit: DailyHabit, db: Session) -> HabitAnalytics:
         completion_rate=completion_rate,
         current_streak=current_streak,
         longest_streak=longest_streak,
-        history=sorted_dates
+        history=sorted_dates,
+        subtasks=habit.subtasks,
+        logs=logs
     )
 
 
@@ -75,7 +77,8 @@ def create_habit(
         title=payload.title,
         description=payload.description,
         duration_days=payload.duration_days,
-        start_date=start_dt
+        start_date=start_dt,
+        subtasks=payload.subtasks or []
     )
     db.add(habit)
     db.commit()
@@ -195,9 +198,47 @@ def log_habit_completion(
         DailyHabitLog.date == payload.date
     ).first()
 
-    if payload.completed:
+    # Determine completion state
+    is_completed = payload.completed
+    if habit.subtasks:
+        if payload.completed_subtasks is not None:
+            is_completed = len(payload.completed_subtasks) >= len(habit.subtasks)
+        else:
+            is_completed = False
+
+    # Determine whether we keep/save the log or delete it
+    should_delete = False
+    if not habit.subtasks:
+        should_delete = not payload.completed
+    else:
+        should_delete = not payload.completed_subtasks
+
+    if should_delete:
         if existing_log:
-            existing_log.completed = True
+            db.delete(existing_log)
+            db.commit()
+            return HabitLogOut(
+                id=existing_log.id,
+                habit_id=habit_id,
+                date=payload.date,
+                completed=False,
+                completed_subtasks=[],
+                created_at=existing_log.created_at
+            )
+        else:
+            return HabitLogOut(
+                id=0,
+                habit_id=habit_id,
+                date=payload.date,
+                completed=False,
+                completed_subtasks=[],
+                created_at=datetime.utcnow()
+            )
+    else:
+        if existing_log:
+            existing_log.completed = is_completed
+            if habit.subtasks and payload.completed_subtasks is not None:
+                existing_log.completed_subtasks = payload.completed_subtasks
             db.commit()
             db.refresh(existing_log)
             return existing_log
@@ -205,23 +246,10 @@ def log_habit_completion(
             log = DailyHabitLog(
                 habit_id=habit_id,
                 date=payload.date,
-                completed=True
+                completed=is_completed,
+                completed_subtasks=payload.completed_subtasks or []
             )
             db.add(log)
             db.commit()
             db.refresh(log)
             return log
-    else:
-        if existing_log:
-            db.delete(existing_log)
-            db.commit()
-            # Return dummy log or raise response
-            return HabitLogOut(
-                id=existing_log.id,
-                habit_id=habit_id,
-                date=payload.date,
-                completed=False,
-                created_at=existing_log.created_at
-            )
-        else:
-            raise HTTPException(status_code=404, detail="No log exists for this date to uncheck.")

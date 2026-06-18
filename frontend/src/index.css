@@ -610,6 +610,19 @@ input[type="range"]::-webkit-slider-thumb:hover {
   color: var(--primary-blue);
 }
 
+.challenge-day-card.partial {
+  background: rgba(76, 201, 240, 0.1);
+  border-color: rgba(76, 201, 240, 0.4);
+  box-shadow: 0 0 10px rgba(76, 201, 240, 0.1);
+}
+
+.challenge-day-card.selected {
+  border-color: var(--primary-pink);
+  background: rgba(247, 37, 133, 0.05);
+  box-shadow: 0 0 12px rgba(247, 37, 133, 0.25);
+  transform: scale(1.05);
+}
+
 .challenge-day-card.future {
   opacity: 0.4;
   cursor: not-allowed;

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { apiGet, apiPost, apiPatch, apiDelete } from '../utils/api';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { Calendar, Flame, Trophy, Trash2, CheckCircle2, ChevronDown, ChevronUp, Lock } from 'lucide-react';
+import { Calendar, Flame, Trophy, Trash2, CheckCircle2, ChevronDown, ChevronUp, Lock, Plus } from 'lucide-react';
 
 export default function DailyChallenges() {
   const [summary, setSummary] = useState(null);
@@ -14,6 +14,9 @@ export default function DailyChallenges() {
   const [durationPreset, setDurationPreset] = useState('30');
   const [customDays, setCustomDays] = useState(30);
   const [startDate, setStartDate] = useState(new Date().toISOString().substring(0, 10));
+  const [subtasks, setSubtasks] = useState([]);
+  const [newSubtask, setNewSubtask] = useState('');
+  const [selectedDates, setSelectedDates] = useState({});
 
   useEffect(() => {
     fetchSummary();
@@ -30,6 +33,48 @@ export default function DailyChallenges() {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const getSelectedDate = (habitId) => {
+    return selectedDates[habitId] || new Date().toISOString().substring(0, 10);
+  };
+
+  const handleDayClick = (h, dateStr, currentChecked) => {
+    if (h.subtasks && h.subtasks.length > 0) {
+      setSelectedDates({
+        ...selectedDates,
+        [h.habit_id]: dateStr
+      });
+    } else {
+      handleToggleLog(h.habit_id, dateStr, currentChecked);
+    }
+  };
+
+  const handleToggleSubtask = async (h, dateStr, subtaskTitle) => {
+    const selectedDate = getSelectedDate(h.habit_id);
+    const dateLog = h.logs?.find(log => log.date === selectedDate);
+    let currentCompleted = dateLog ? dateLog.completed_subtasks : [];
+    
+    let newCompleted;
+    if (currentCompleted.includes(subtaskTitle)) {
+      newCompleted = currentCompleted.filter(item => item !== subtaskTitle);
+    } else {
+      newCompleted = [...currentCompleted, subtaskTitle];
+    }
+
+    try {
+      const payload = {
+        date: dateStr,
+        completed: newCompleted.length >= h.subtasks.length,
+        completed_subtasks: newCompleted
+      };
+      const result = await apiPost(`/habits/${h.habit_id}/log`, payload);
+      if (result) {
+        fetchSummary();
+      }
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -52,11 +97,14 @@ export default function DailyChallenges() {
         description,
         duration_days: durationDays,
         start_date: startDate,
+        subtasks,
       };
       const result = await apiPost('/habits', payload);
       if (result) {
         setTitle('');
         setDescription('');
+        setSubtasks([]);
+        setNewSubtask('');
         setDurationPreset('30');
         setShowForm(false);
         fetchSummary();
@@ -189,6 +237,61 @@ export default function DailyChallenges() {
                 onChange={(e) => setDescription(e.target.value)}
                 rows={2}
               />
+            </div>
+            
+            <div className="form-group">
+              <label>Daily Sub-tasks (Checklist Items)</label>
+              <p className="text-muted" style={{ fontSize: '0.8rem', marginTop: '-0.25rem', marginBottom: '0.5rem' }}>
+                Add individual items you want to tick off daily (e.g. "Take medicine 1", "LeetCode", "GATE for 2 hours").
+              </p>
+              
+              {subtasks.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                  {subtasks.map((st, idx) => (
+                    <div key={idx} className="flex justify-between items-center" style={{ background: 'rgba(255,255,255,0.02)', padding: '0.4rem 0.75rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                      <span style={{ fontSize: '0.9rem' }}>{st}</span>
+                      <button
+                        type="button"
+                        onClick={() => setSubtasks(subtasks.filter((_, i) => i !== idx))}
+                        style={{ background: 'none', border: 'none', color: '#ff4d4d', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Type a subtask and press Enter or Add button"
+                  value={newSubtask}
+                  onChange={(e) => setNewSubtask(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      if (newSubtask.trim()) {
+                        setSubtasks([...subtasks, newSubtask.trim()]);
+                        setNewSubtask('');
+                      }
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => {
+                    if (newSubtask.trim()) {
+                      setSubtasks([...subtasks, newSubtask.trim()]);
+                      setNewSubtask('');
+                    }
+                  }}
+                  style={{ padding: '0.5rem 1.25rem' }}
+                >
+                  Add
+                </button>
+              </div>
             </div>
             
             <div className="grid-3">
@@ -349,6 +452,44 @@ export default function DailyChallenges() {
                     <div style={{ height: '100%', width: `${Math.min(h.completion_rate, 100)}%`, background: 'linear-gradient(90deg, var(--primary-blue), var(--primary-purple))', transition: 'width 0.3s ease' }} />
                   </div>
 
+                  {/* Interactive Sub-tasks Checklist for Selected Date */}
+                  {h.subtasks && h.subtasks.length > 0 && (() => {
+                    const selectedDate = getSelectedDate(h.habit_id);
+                    const dateLog = h.logs?.find(log => log.date === selectedDate);
+                    const completedSubtasksForDate = dateLog ? dateLog.completed_subtasks : [];
+                    
+                    return (
+                      <div className="subtasks-checklist-container mb-4" style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.05)', borderRadius: '10px', padding: '1.25rem' }}>
+                        <div className="flex justify-between items-center mb-3">
+                          <h4 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#fff' }}>
+                            📝 Tasks for {new Date(selectedDate).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </h4>
+                          <span className="text-muted" style={{ fontSize: '0.8rem', fontWeight: 600 }}>
+                            {completedSubtasksForDate.length} / {h.subtasks.length} Completed
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                          {h.subtasks.map((st, sIdx) => {
+                            const isChecked = completedSubtasksForDate.includes(st);
+                            return (
+                              <label key={sIdx} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', margin: 0, userSelect: 'none', background: 'rgba(255,255,255,0.01)', padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.02)', transition: 'background 0.2s' }} className="subtask-item-label">
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => handleToggleSubtask(h, selectedDate, st)}
+                                  style={{ width: '16px', height: '16px', accentColor: 'var(--primary-blue)', cursor: 'pointer' }}
+                                />
+                                <span style={{ fontSize: '0.9rem', textDecoration: isChecked ? 'line-through' : 'none', color: isChecked ? 'var(--text-muted)' : '#e2e8f0', transition: 'all 0.2s' }}>
+                                  {st}
+                                </span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   {/* Habit Calendar Checkbox Grid */}
                   <h4 className="font-semibold mb-2" style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Completion Grid:</h4>
                   <div className="challenge-grid">
@@ -356,18 +497,30 @@ export default function DailyChallenges() {
                       const dateStr = dateObj.toISOString().substring(0, 10);
                       const isFuture = isFutureDate(dateObj);
                       const checked = historySet.has(dateStr);
+                      const selectedDate = getSelectedDate(h.habit_id);
+                      const isSelected = selectedDate === dateStr;
+                      
+                      const hasSubtasks = h.subtasks && h.subtasks.length > 0;
+                      const dateLog = h.logs?.find(log => log.date === dateStr);
+                      const completedCount = dateLog ? dateLog.completed_subtasks?.length || 0 : 0;
+                      const totalSubtasks = hasSubtasks ? h.subtasks.length : 0;
+                      const isPartiallyChecked = hasSubtasks && completedCount > 0 && completedCount < totalSubtasks;
 
                       return (
                         <div
                           key={idx}
-                          className={`challenge-day-card ${checked ? 'checked' : ''} ${isFuture ? 'future' : ''}`}
-                          onClick={() => !isFuture && handleToggleLog(habitId, dateStr, checked)}
+                          className={`challenge-day-card ${checked ? 'checked' : ''} ${isPartiallyChecked ? 'partial' : ''} ${isSelected ? 'selected' : ''} ${isFuture ? 'future' : ''}`}
+                          onClick={() => !isFuture && handleDayClick(h, dateStr, checked)}
                         >
                           <span className="day-number">Day {idx + 1}</span>
                           {isFuture ? (
                             <Lock size={12} className="text-muted" />
                           ) : checked ? (
                             <CheckCircle2 size={12} className="day-check-icon" />
+                          ) : hasSubtasks ? (
+                            <span style={{ fontSize: '0.65rem', fontWeight: 700, color: isPartiallyChecked ? 'var(--primary-blue)' : 'var(--text-muted)' }}>
+                              {completedCount}/{totalSubtasks}
+                            </span>
                           ) : (
                             <span style={{ width: 12, height: 12, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.3)' }} />
                           )}
