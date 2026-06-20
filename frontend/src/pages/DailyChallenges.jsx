@@ -20,6 +20,7 @@ export default function DailyChallenges() {
 
   const [localLogs, setLocalLogs] = useState({});
   const [savingKeys, setSavingKeys] = useState({}); // tracks which subtask rows are saving
+  const [showManageHabits, setShowManageHabits] = useState(false);
   const [reminderEnabled, setReminderEnabled] = useState(
     localStorage.getItem('hourly_reminder') === 'true'
   );
@@ -263,46 +264,71 @@ export default function DailyChallenges() {
     }
   };
 
-  // Generate date array for checkboxes
-  const getChallengeDates = (startStr, durationDays) => {
-    const dates = [];
-    const start = new Date(startStr);
-    for (let i = 0; i < durationDays; i++) {
-      const current = new Date(start);
-      current.setDate(start.getDate() + i);
-      dates.push(current);
-    }
-    return dates;
-  };
-
-  // Check if a date is in the future
-  const isFutureDate = (d) => {
-    const today = new Date();
-    today.setHours(0,0,0,0);
-    const dateToCheck = new Date(d);
-    dateToCheck.setHours(0,0,0,0);
-    return dateToCheck > today;
-  };
-
-  const formatDateLabel = (d) => {
-    return d.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
-  };
-
-  const getChartData = () => {
+  // Get all active tasks for today
+  const getTodayTasks = () => {
     if (!summary || !summary.habits) return [];
-    return summary.habits.map(h => ({
-      name: h.title.substring(0, 15) + (h.title.length > 15 ? '...' : ''),
-      'Completion Rate': h.completion_rate,
-      'Current Streak': h.current_streak,
-      'Longest Streak': h.longest_streak,
-    }));
+    
+    const todayStr = new Date().toISOString().substring(0, 10);
+    const tasksList = [];
+    
+    summary.habits.forEach(h => {
+      if (h.status !== 'active') return;
+      
+      const hasSubtasks = h.subtasks && h.subtasks.length > 0;
+      if (hasSubtasks) {
+        h.subtasks.forEach(st => {
+          const logKey = `${h.habit_id}_${todayStr}`;
+          const completedSubtasks = localLogs[logKey] || [];
+          const isChecked = completedSubtasks.includes(st);
+          
+          tasksList.push({
+            type: 'subtask',
+            id: `subtask_${h.habit_id}_${st}`,
+            title: st,
+            category: h.title,
+            habit: h,
+            checked: isChecked,
+            isSaving: savingKeys[`${logKey}_${st}`],
+            onToggle: () => handleToggleSubtask(h, todayStr, st)
+          });
+        });
+      } else {
+        const isChecked = h.logs?.find(log => log.date === todayStr)?.completed || false;
+        
+        tasksList.push({
+          type: 'habit',
+          id: `habit_${h.habit_id}`,
+          title: h.title,
+          category: 'General',
+          habit: h,
+          checked: isChecked,
+          isSaving: false,
+          onToggle: () => handleToggleLog(h.habit_id, todayStr, isChecked)
+        });
+      }
+    });
+    
+    return tasksList;
   };
+
+  const todayStr = new Date().toISOString().substring(0, 10);
+  const todayTasks = getTodayTasks();
+  const totalTasksCount = todayTasks.length;
+  const completedTasksCount = todayTasks.filter(t => t.checked).length;
+  const progressPercent = totalTasksCount > 0 ? Math.round((completedTasksCount / totalTasksCount) * 100) : 0;
+
+  const todayFormatted = new Date(todayStr + 'T00:00:00').toLocaleDateString('en-US', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  });
 
   return (
     <div className="fade-in-section">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 style={{ fontSize: '2.2rem', fontWeight: 800 }}>📅 Daily Challenges</h1>
+          <h1 style={{ fontSize: '2.2rem', fontWeight: 800 }}>📅 Daily Tasks</h1>
           <p className="text-muted">Form habits by tracking daily tasks. Maintain streaks and build consistency.</p>
         </div>
         <div className="flex gap-3 items-center">
@@ -317,20 +343,20 @@ export default function DailyChallenges() {
           </button>
           <button className="btn" onClick={() => setShowForm(!showForm)}>
             <Plus size={16} />
-            {showForm ? 'Close' : 'Start Challenge'}
+            {showForm ? 'Close' : 'Add Tasks/Category'}
           </button>
         </div>
       </div>
 
       {showForm && (
         <div className="glass-card mb-6">
-          <h3 className="font-bold text-lg mb-4">🏁 Start 30-Day (or custom) Challenge</h3>
+          <h3 className="font-bold text-lg mb-4">🏁 Add Daily Habit Category & Tasks</h3>
           <form onSubmit={handleStartChallenge}>
             <div className="form-group">
-              <label>Challenge Title *</label>
+              <label>Category Title *</label>
               <input
                 type="text"
-                placeholder="e.g. 30 Days of Code, Daily Math Prep, Workout"
+                placeholder="e.g. Medicine, Study, Fitness"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 required
@@ -339,7 +365,7 @@ export default function DailyChallenges() {
             <div className="form-group">
               <label>Description / Motivation</label>
               <textarea
-                placeholder="Why is this important? Keep your motivation visible..."
+                placeholder="Why is this category important? Keep your motivation visible..."
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={2}
@@ -448,288 +474,178 @@ export default function DailyChallenges() {
         <div className="text-muted text-center p-6">Recalling habit sheets...</div>
       ) : summary ? (
         <div>
-          {/* Summary Row */}
-          <div className="grid-4 mb-6">
-            <div className="metric-card">
-              <h4>Total Logged</h4>
-              <p>{summary.total_habits}</p>
+          {/* Unified Daily Tasks Checklist Card */}
+          <div className="glass-card" style={{ padding: '2rem' }}>
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h3 className="font-bold text-xl mb-1">📝 Today's Tasks</h3>
+                <p className="text-muted" style={{ fontSize: '0.88rem' }}>
+                  {todayFormatted}
+                </p>
+              </div>
+              <div>
+                <span style={{
+                  fontSize: '0.85rem', fontWeight: 700, padding: '0.3rem 0.8rem',
+                  borderRadius: '999px',
+                  background: totalTasksCount > 0 && completedTasksCount === totalTasksCount
+                    ? 'rgba(46,204,113,0.15)' : 'rgba(255,255,255,0.06)',
+                  color: totalTasksCount > 0 && completedTasksCount === totalTasksCount
+                    ? '#2ecc71' : 'var(--text-muted)',
+                  border: totalTasksCount > 0 && completedTasksCount === totalTasksCount
+                    ? '1px solid rgba(46,204,113,0.3)' : '1px solid rgba(255,255,255,0.08)'
+                }}>
+                  {totalTasksCount === 0 ? 'No tasks' : completedTasksCount === totalTasksCount ? '✅ All Done!' : `${completedTasksCount} / ${totalTasksCount}`}
+                </span>
+              </div>
             </div>
-            <div className="metric-card">
-              <h4>Active Challenges</h4>
-              <p>{summary.active_habits}</p>
-            </div>
-            <div className="metric-card">
-              <h4>Completed</h4>
-              <p>{summary.completed_habits}</p>
-            </div>
-            <div className="metric-card">
-              <h4>Avg Completion Rate</h4>
-              <p>{summary.avg_completion_rate}%</p>
-            </div>
+
+            {totalTasksCount > 0 && (
+              <div style={{ height: '8px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', marginBottom: '1.5rem', overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${progressPercent}%`, background: 'linear-gradient(90deg, var(--primary-blue), var(--primary-purple))', transition: 'width 0.3s ease' }} />
+              </div>
+            )}
+
+            {todayTasks.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {todayTasks.map((t) => (
+                  <label
+                    key={t.id}
+                    onClick={() => !t.isSaving && t.onToggle()}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.75rem',
+                      cursor: t.isSaving ? 'wait' : 'pointer',
+                      margin: 0,
+                      userSelect: 'none',
+                      padding: '0.8rem 1.1rem',
+                      borderRadius: '10px',
+                      border: t.checked ? '1px solid rgba(46,204,113,0.35)' : '1px solid rgba(255,255,255,0.06)',
+                      background: t.checked ? 'rgba(46,204,113,0.08)' : 'rgba(255,255,255,0.02)',
+                      transition: 'all 0.2s',
+                      opacity: t.isSaving ? 0.7 : 1
+                    }}
+                  >
+                    {/* Custom styled checkbox */}
+                    <div style={{
+                      width: '22px',
+                      height: '22px',
+                      borderRadius: '7px',
+                      flexShrink: 0,
+                      border: t.checked ? '2px solid #2ecc71' : '2px solid rgba(255,255,255,0.25)',
+                      background: t.checked ? '#2ecc71' : 'transparent',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'all 0.2s'
+                    }}>
+                      {t.isSaving ? (
+                        <span style={{ fontSize: '10px', animation: 'spin 1s linear infinite', display: 'inline-block' }}>⟳</span>
+                      ) : t.checked ? (
+                        <span style={{ color: '#fff', fontSize: '12px', fontWeight: 900 }}>✓</span>
+                      ) : null}
+                    </div>
+                    
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                      <span style={{
+                        fontSize: '0.95rem',
+                        fontWeight: 500,
+                        textDecoration: t.checked ? 'line-through' : 'none',
+                        color: t.checked ? 'rgba(255,255,255,0.4)' : '#e2e8f0',
+                        transition: 'all 0.2s'
+                      }}>
+                        {t.title}
+                      </span>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                        Category: {t.category}
+                      </span>
+                    </div>
+                    
+                    {t.checked && !t.isSaving && (
+                      <span style={{ fontSize: '0.75rem', color: '#2ecc71', fontWeight: 600 }}>Saved ✓</span>
+                    )}
+                    {t.isSaving && (
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>Saving...</span>
+                    )}
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center text-muted p-8">
+                <Calendar size={48} className="mb-2" style={{ opacity: 0.3, margin: '0 auto' }} />
+                <p>No active daily tasks found. Create a Category and add some tasks to see them here.</p>
+              </div>
+            )}
           </div>
 
-          <div className="divider" />
-
-          {/* List of Challenges */}
-          <h3 className="font-bold text-lg mb-4">🎯 Active Challenges</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-            {summary.habits?.map((h) => {
-              const habitId = h.habit_id;
-              const dates = getChallengeDates(h.start_date, h.duration_days);
-              const historySet = new Set(h.history);
-              const endDate = new Date(new Date(h.start_date).getTime() + (h.duration_days - 1) * 24 * 60 * 60 * 1000);
-              const isPastEnd = new Date() > endDate;
-
-              return (
-                <div key={habitId} className="glass-card" style={{ padding: '2rem' }}>
-                  <div className="flex justify-between items-start mb-4">
-                    <div>
-                      <h3 className="font-bold text-xl mb-1">{h.title}</h3>
-                      <p className="text-muted" style={{ fontSize: '0.85rem' }}>
-                        📅 {h.start_date} to {endDate.toISOString().substring(0, 10)} ({h.duration_days} Days) •{' '}
-                        <span className={`badge ${h.status === 'active' ? 'badge-active' : 'badge-completed'}`}>
-                          {h.status}
-                        </span>
-                      </p>
-                    </div>
-
-                    <div className="flex gap-2">
-                      {h.status === 'active' && isPastEnd && (
-                        <button
-                          className="btn"
-                          style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
-                          onClick={() => handleMarkComplete(habitId)}
-                        >
-                          <CheckCircle2 size={14} /> Finish
-                        </button>
-                      )}
-                      {h.status === 'completed' && (
-                        <button
-                          className="btn btn-secondary"
-                          style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
-                          onClick={() => handleArchiveChallenge(habitId)}
-                        >
-                          Archive
-                        </button>
-                      )}
-                      <button
-                        className="btn btn-danger"
-                        style={{ padding: '0.4rem 0.6rem' }}
-                        onClick={() => handleDeleteChallenge(habitId)}
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </div>
-
-                  {h.description && (
-                    <p className="text-muted mb-4" style={{ fontSize: '0.9rem' }}>
-                      {h.description}
-                    </p>
-                  )}
-
-                  {/* Highlights row */}
-                  <div className="grid-4 mb-4" style={{ background: 'rgba(255,255,255,0.01)', borderRadius: '10px', padding: '0.75rem', border: '1px solid rgba(255,255,255,0.03)' }}>
-                    <div className="text-center">
-                      <span className="text-muted" style={{ fontSize: '0.72rem', textTransform: 'uppercase' }}>Streak</span>
-                      <div className="flex items-center justify-center gap-1 mt-1">
-                        <Flame size={16} style={{ color: 'var(--primary-pink)' }} />
-                        <strong style={{ fontSize: '1rem' }}>{h.current_streak} Days</strong>
-                      </div>
-                    </div>
-                    <div className="text-center">
-                      <span className="text-muted" style={{ fontSize: '0.72rem', textTransform: 'uppercase' }}>Max Streak</span>
-                      <div className="flex items-center justify-center gap-1 mt-1">
-                        <Trophy size={16} style={{ color: '#f1c40f' }} />
-                        <strong style={{ fontSize: '1rem' }}>{h.longest_streak} Days</strong>
-                      </div>
-                    </div>
-                    <div className="text-center">
-                      <span className="text-muted" style={{ fontSize: '0.72rem', textTransform: 'uppercase' }}>Completion</span>
-                      <strong style={{ fontSize: '1rem', display: 'block', marginTop: '0.2rem', color: 'var(--primary-blue)' }}>{h.completion_rate}%</strong>
-                    </div>
-                    <div className="text-center">
-                      <span className="text-muted" style={{ fontSize: '0.72rem', textTransform: 'uppercase' }}>Checked In</span>
-                      <strong style={{ fontSize: '1rem', display: 'block', marginTop: '0.2rem', color: '#2ecc71' }}>{h.completed_days_count} / {h.duration_days}</strong>
-                    </div>
-                  </div>
-
-                  {/* Progress bar */}
-                  <div style={{ height: '6px', background: 'rgba(255,255,255,0.05)', borderRadius: '3px', marginBottom: '1.5rem', overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${Math.min(h.completion_rate, 100)}%`, background: 'linear-gradient(90deg, var(--primary-blue), var(--primary-purple))', transition: 'width 0.3s ease' }} />
-                  </div>
-                  {/* Interactive Sub-tasks Checklist for Selected Date */}
-                  {h.subtasks && h.subtasks.length > 0 && (() => {
-                    const selectedDate = getSelectedDate(h.habit_id);
-                    const logKey = `${h.habit_id}_${selectedDate}`;
-                    const completedSubtasksForDate = localLogs[logKey] || [];
-                    
-                    const dbLog = h.logs?.find(log => log.date === selectedDate);
-                    const dbCompleted = dbLog ? dbLog.completed_subtasks || [] : [];
-                    const isDirty = JSON.stringify([...dbCompleted].sort()) !== JSON.stringify([...completedSubtasksForDate].sort());
-
-                    return (
-                      <div className="subtasks-checklist-container mb-4" style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.05)', borderRadius: '10px', padding: '1.25rem' }}>
-                        <div className="flex justify-between items-center mb-3">
-                          <h4 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#fff' }}>
-                            📝 Tasks for {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
-                          </h4>
-                          <div className="flex items-center gap-2">
-                            {/* Progress pill */}
-                            <span style={{
-                              fontSize: '0.78rem', fontWeight: 700, padding: '0.2rem 0.65rem',
-                              borderRadius: '999px',
-                              background: completedSubtasksForDate.length === h.subtasks.length
-                                ? 'rgba(46,204,113,0.15)' : 'rgba(255,255,255,0.06)',
-                              color: completedSubtasksForDate.length === h.subtasks.length
-                                ? '#2ecc71' : 'var(--text-muted)',
-                              border: completedSubtasksForDate.length === h.subtasks.length
-                                ? '1px solid rgba(46,204,113,0.3)' : '1px solid rgba(255,255,255,0.08)'
-                            }}>
-                              {completedSubtasksForDate.length === h.subtasks.length ? '✅ All Done!' : `${completedSubtasksForDate.length} / ${h.subtasks.length}`}
-                            </span>
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                          {h.subtasks.map((st, sIdx) => {
-                            const isChecked = completedSubtasksForDate.includes(st);
-                            const saveKey = `${h.habit_id}_${selectedDate}_${st}`;
-                            const isSaving = savingKeys[saveKey];
-                            return (
-                              <label
-                                key={sIdx}
-                                onClick={() => !isSaving && handleToggleSubtask(h, selectedDate, st)}
-                                style={{
-                                  display: 'flex', alignItems: 'center', gap: '0.75rem',
-                                  cursor: isSaving ? 'wait' : 'pointer', margin: 0, userSelect: 'none',
-                                  padding: '0.65rem 0.9rem', borderRadius: '8px',
-                                  border: isChecked ? '1px solid rgba(46,204,113,0.25)' : '1px solid rgba(255,255,255,0.06)',
-                                  background: isChecked ? 'rgba(46,204,113,0.07)' : 'rgba(255,255,255,0.02)',
-                                  transition: 'all 0.2s', opacity: isSaving ? 0.7 : 1
-                                }}
-                              >
-                                {/* Custom styled checkbox */}
-                                <div style={{
-                                  width: '20px', height: '20px', borderRadius: '6px', flexShrink: 0,
-                                  border: isChecked ? '2px solid #2ecc71' : '2px solid rgba(255,255,255,0.25)',
-                                  background: isChecked ? '#2ecc71' : 'transparent',
-                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                  transition: 'all 0.2s'
-                                }}>
-                                  {isSaving ? (
-                                    <span style={{ fontSize: '10px', animation: 'spin 1s linear infinite', display: 'inline-block' }}>⟳</span>
-                                  ) : isChecked ? (
-                                    <span style={{ color: '#fff', fontSize: '12px', fontWeight: 900 }}>✓</span>
-                                  ) : null}
-                                </div>
-                                <span style={{
-                                  fontSize: '0.9rem', flex: 1,
-                                  textDecoration: isChecked ? 'line-through' : 'none',
-                                  color: isChecked ? 'rgba(255,255,255,0.4)' : '#e2e8f0',
-                                  transition: 'all 0.2s'
-                                }}>
-                                  {st}
-                                </span>
-                                {isChecked && !isSaving && (
-                                  <span style={{ fontSize: '0.72rem', color: '#2ecc71', fontWeight: 600 }}>Saved ✓</span>
-                                )}
-                                {isSaving && (
-                                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600 }}>Saving...</span>
-                                )}
-                              </label>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* Habit Calendar Checkbox Grid */}
-                  <h4 className="font-semibold mb-2" style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Completion Grid:</h4>
-                  <div className="challenge-grid">
-                    {dates.map((dateObj, idx) => {
-                      const dateStr = dateObj.toISOString().substring(0, 10);
-                      const isFuture = isFutureDate(dateObj);
-                      const selectedDate = getSelectedDate(h.habit_id);
-                      const isSelected = selectedDate === dateStr;
+          {/* Manage Categories Bottom Panel */}
+          {summary.habits?.length > 0 && (
+            <div className="glass-card mt-6" style={{ padding: '1.5rem' }}>
+              <button
+                type="button"
+                className="flex justify-between items-center w-full"
+                style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', textAlign: 'left' }}
+                onClick={() => setShowManageHabits(!showManageHabits)}
+              >
+                <h3 className="font-bold text-lg flex items-center gap-2 m-0" style={{ color: '#fff' }}>
+                  ⚙️ Manage Habit Categories ({summary.habits?.length || 0})
+                </h3>
+                {showManageHabits ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+              </button>
+              
+              {showManageHabits && (
+                <div className="mt-4" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <p className="text-muted" style={{ fontSize: '0.85rem' }}>
+                    Here you can view, archive, or delete your daily categories. Deleting a category will remove its tasks from your checklist.
+                  </p>
+                  
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    {summary.habits.map((h) => {
+                      const endDate = new Date(new Date(h.start_date).getTime() + (h.duration_days - 1) * 24 * 60 * 60 * 1000);
+                      const isPastEnd = new Date() > endDate;
                       
-                      const hasSubtasks = h.subtasks && h.subtasks.length > 0;
-                      const logKey = `${h.habit_id}_${dateStr}`;
-                      const completedCount = hasSubtasks ? (localLogs[logKey]?.length || 0) : 0;
-                      const totalSubtasks = hasSubtasks ? h.subtasks.length : 0;
-                      const isPartiallyChecked = hasSubtasks && completedCount > 0 && completedCount < totalSubtasks;
-                      const checked = hasSubtasks ? (completedCount === totalSubtasks) : historySet.has(dateStr);
-
                       return (
-                        <div
-                          key={idx}
-                          className={`challenge-day-card ${checked ? 'checked' : ''} ${isPartiallyChecked ? 'partial' : ''} ${isSelected ? 'selected' : ''} ${isFuture ? 'future' : ''}`}
-                          onClick={() => !isFuture && handleDayClick(h, dateStr, checked)}
-                        >
-                          <span className="day-number">Day {idx + 1}</span>
-                          {isFuture ? (
-                            <Lock size={12} className="text-muted" />
-                          ) : checked ? (
-                            <CheckCircle2 size={12} className="day-check-icon" />
-                          ) : hasSubtasks ? (
-                            <span style={{ fontSize: '0.65rem', fontWeight: 700, color: isPartiallyChecked ? 'var(--primary-blue)' : 'var(--text-muted)' }}>
-                              {completedCount}/{totalSubtasks}
-                            </span>
-                          ) : (
-                            <span style={{ width: 12, height: 12, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.3)' }} />
-                          )}
-                          <span className="day-date">{formatDateLabel(dateObj)}</span>
+                        <div key={h.habit_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.02)', padding: '1rem', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                          <div>
+                            <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>{h.title}</h4>
+                            <p className="text-muted" style={{ fontSize: '0.78rem', marginTop: '0.2rem' }}>
+                              {h.duration_days} Days ({h.start_date} to {endDate.toISOString().substring(0, 10)}) • Streak: {h.current_streak} days • Rate: {h.completion_rate}%
+                            </p>
+                          </div>
+                          
+                          <div className="flex gap-2">
+                            {h.status === 'active' && isPastEnd && (
+                              <button
+                                className="btn"
+                                style={{ padding: '0.35rem 0.6rem', fontSize: '0.78rem' }}
+                                onClick={() => handleMarkComplete(h.habit_id)}
+                              >
+                                Finish
+                              </button>
+                            )}
+                            {h.status === 'completed' && (
+                              <button
+                                className="btn btn-secondary"
+                                style={{ padding: '0.35rem 0.6rem', fontSize: '0.78rem' }}
+                                onClick={() => handleArchiveChallenge(h.habit_id)}
+                              >
+                                Archive
+                              </button>
+                            )}
+                            <button
+                              className="btn btn-danger"
+                              style={{ padding: '0.35rem 0.6rem', fontSize: '0.78rem' }}
+                              onClick={() => handleDeleteChallenge(h.habit_id)}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
                         </div>
                       );
                     })}
                   </div>
                 </div>
-              );
-            })}
-
-            {summary.habits?.length === 0 && (
-              <div className="glass-card text-center text-muted p-8">
-                <Calendar size={48} className="mb-2" style={{ opacity: 0.3, margin: '0 auto' }} />
-                <p>No logged challenges. Click 'Start Challenge' above to setup a daily habit logs sheet.</p>
-              </div>
-            )}
-          </div>
-
-          <div className="divider" />
-
-          {/* Recharts Analytics graphs */}
-          {summary.habits?.length > 0 && (
-            <div>
-              <h3 className="font-bold text-lg mb-4">📈 Habit Analytics</h3>
-              <div className="grid-2">
-                {/* Graph 1: Completion rates */}
-                <div className="glass-card" style={{ height: '350px' }}>
-                  <h4 className="font-semibold text-center mb-4" style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>Completion Rates (%)</h4>
-                  <ResponsiveContainer width="100%" height="90%">
-                    <BarChart data={getChartData()} layout="vertical">
-                      <XAxis type="number" domain={[0, 100]} stroke="#a0a0cc" />
-                      <YAxis dataKey="name" type="category" width={100} stroke="#a0a0cc" style={{ fontSize: '0.8rem' }} />
-                      <Tooltip contentStyle={{ background: '#150f27', borderColor: 'var(--primary-purple)' }} />
-                      <Bar dataKey="Completion Rate" fill="var(--primary-blue)" radius={[0, 4, 4, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-
-                {/* Graph 2: Streaks comparison */}
-                <div className="glass-card" style={{ height: '350px' }}>
-                  <h4 className="font-semibold text-center mb-4" style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>Streaks Comparison (Days)</h4>
-                  <ResponsiveContainer width="100%" height="90%">
-                    <BarChart data={getChartData()}>
-                      <XAxis dataKey="name" stroke="#a0a0cc" style={{ fontSize: '0.8rem' }} />
-                      <YAxis stroke="#a0a0cc" />
-                      <Tooltip contentStyle={{ background: '#150f27', borderColor: 'var(--primary-purple)' }} />
-                      <Legend />
-                      <Bar dataKey="Current Streak" fill="var(--primary-pink)" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="Longest Streak" fill="var(--primary-purple)" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
+              )}
             </div>
           )}
         </div>
